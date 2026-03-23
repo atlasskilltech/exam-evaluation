@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Evaluation System</title>
+</head>
+<body>
+  <script>
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      window.location.href = '/login.html';
+    } else {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const role = payload.role;
+        if (role === 'student') window.location.href = '/exam-results.html';
+        else if (role === 'principal') window.location.href = '/analytics.html';
+        else window.location.href = '/dashboard.html';
+      } catch (e) {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login.html';
+      }
+    }
+  </script>
+</body>
+</html>

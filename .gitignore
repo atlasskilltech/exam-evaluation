@@ -1,0 +1,8 @@
+node_modules/
+.env
+uploads/scans/
+uploads/invoices/
+uploads/gradesheets/
+uploads/csv/
+*.log
+.DS_Store

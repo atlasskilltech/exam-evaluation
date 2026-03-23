@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Import - AI Evaluation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="importPage()" x-init="init()">
+  <aside class="fixed inset-y-0 left-0 w-64 bg-indigo-700 text-white transform transition-transform z-30"
+         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
+    <div class="p-6 text-xl font-bold border-b border-indigo-600">AI Evaluation</div>
+    <nav class="mt-4 space-y-1 px-3">
+      <a href="/dashboard.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Dashboard</a>
+      <a href="/exams.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Exams</a>
+      <a href="/upload.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Upload</a>
+      <a href="/review.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Review</a>
+      <a href="/results.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Results</a>
+      <a href="/analytics.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Analytics</a>
+      <a href="/import.html" class="block px-4 py-2.5 rounded-lg bg-indigo-800">Import</a>
+      <a href="#" @click.prevent="logout()" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600 mt-8">Logout</a>
+    </nav>
+  </aside>
+
+  <div class="lg:hidden fixed top-0 left-0 right-0 bg-indigo-700 text-white p-4 z-20 flex items-center">
+    <button @click="sidebarOpen = !sidebarOpen" class="mr-4">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <span class="font-bold">CSV Import</span>
+  </div>
+
+  <main class="lg:ml-64 p-6 pt-20 lg:pt-6">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">CSV Import</h1>
+
+    <!-- Tabs -->
+    <div class="flex border-b mb-6">
+      <button @click="activeTab = 'students'" class="px-6 py-3 font-medium border-b-2 -mb-px"
+              :class="activeTab === 'students' ? 'border-indigo-700 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'">
+        Import Students
+      </button>
+      <button @click="activeTab = 'answerkey'" class="px-6 py-3 font-medium border-b-2 -mb-px"
+              :class="activeTab === 'answerkey' ? 'border-indigo-700 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'">
+        Import Answer Key
+      </button>
+    </div>
+
+    <!-- Students Tab -->
+    <div x-show="activeTab === 'students'">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h3 class="font-semibold text-gray-700 mb-4">Import Students from CSV</h3>
+
+        <div class="mb-4">
+          <a href="#" @click.prevent="downloadStudentTemplate()" class="text-indigo-700 hover:text-indigo-800 text-sm font-medium underline">
+            Download CSV Template
+          </a>
+        </div>
+
+        <div class="mb-4">
+          <input type="file" accept=".csv" @change="handleStudentFile($event)" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+        </div>
+
+        <!-- Preview -->
+        <div x-show="studentPreview.length > 0" class="mb-4">
+          <h4 class="text-sm font-medium text-gray-600 mb-2">Preview (first 5 rows):</h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border">
+              <thead class="bg-gray-100">
+                <tr>
+                  <template x-for="col in studentColumns" :key="col">
+                    <th class="px-3 py-2 text-left" x-text="col"></th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, idx) in studentPreview" :key="idx">
+                  <tr class="border-t">
+                    <template x-for="col in studentColumns" :key="col">
+                      <td class="px-3 py-2" x-text="row[col] || '-'"></td>
+                    </template>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <button @click="importStudents()" :disabled="!studentFile || importing"
+                class="px-6 py-2.5 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed">
+          <span x-show="!importing">Import Students</span>
+          <span x-show="importing">Importing...</span>
+        </button>
+
+        <!-- Results -->
+        <div x-show="studentResult" class="mt-4 p-4 rounded-lg" :class="studentResult?.errors?.length > 0 ? 'bg-amber-50' : 'bg-green-50'">
+          <p class="font-medium" x-text="'Total: ' + (studentResult?.total || 0) + ' | Created: ' + (studentResult?.created || 0) + ' | Updated: ' + (studentResult?.updated || 0)"></p>
+          <template x-if="studentResult?.errors?.length > 0">
+            <div class="mt-2">
+              <p class="text-sm text-red-600 font-medium">Errors:</p>
+              <template x-for="err in studentResult.errors" :key="err.row">
+                <p class="text-xs text-red-500" x-text="'Row ' + err.row + ': ' + err.message"></p>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Answer Key Tab -->
+    <div x-show="activeTab === 'answerkey'">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h3 class="font-semibold text-gray-700 mb-4">Import Answer Key from CSV</h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">Exam</label>
+            <select x-model="akExamId" @change="loadAkSubjects()" class="w-full border rounded-lg px-3 py-2">
+              <option value="">Select Exam</option>
+              <template x-for="exam in exams" :key="exam._id">
+                <option :value="exam._id" x-text="exam.name"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">Subject</label>
+            <select x-model="akSubjectId" class="w-full border rounded-lg px-3 py-2">
+              <option value="">Select Subject</option>
+              <template x-for="s in akSubjects" :key="s._id">
+                <option :value="s._id" x-text="s.name"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <a href="#" @click.prevent="downloadAkTemplate()" class="text-indigo-700 hover:text-indigo-800 text-sm font-medium underline">
+            Download CSV Template
+          </a>
+        </div>
+
+        <div class="mb-4">
+          <input type="file" accept=".csv" @change="akFile = $event.target.files[0]" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700">
+        </div>
+
+        <button @click="importAnswerKey()" :disabled="!akFile || !akSubjectId || importing"
+                class="px-6 py-2.5 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50">
+          Import Answer Key
+        </button>
+
+        <div x-show="akResult" class="mt-4 p-4 rounded-lg bg-green-50">
+          <p class="font-medium" x-text="'Total: ' + (akResult?.total || 0) + ' | Success: ' + (akResult?.success || 0)"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import History -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <h3 class="font-semibold text-gray-700 mb-4">Import History</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-indigo-700 text-white">
+            <tr>
+              <th class="px-4 py-3 text-left">Date</th>
+              <th class="px-4 py-3 text-left">Imported By</th>
+              <th class="px-4 py-3 text-center">Records</th>
+              <th class="px-4 py-3 text-center">Status</th>
+              <th class="px-4 py-3 text-center">Errors</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(imp, idx) in imports" :key="imp._id">
+              <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
+                <td class="px-4 py-3" x-text="new Date(imp.createdAt).toLocaleString()"></td>
+                <td class="px-4 py-3" x-text="imp.importedBy?.name || 'N/A'"></td>
+                <td class="px-4 py-3 text-center" x-text="imp.recordCount"></td>
+                <td class="px-4 py-3 text-center">
+                  <span class="px-2 py-1 rounded-full text-xs" :class="imp.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'" x-text="imp.status"></span>
+                </td>
+                <td class="px-4 py-3 text-center" x-text="imp.errors?.length || 0"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      const headers = { 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) };
+      if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+      return fetch(url, { ...opts, headers }).then(r => r.json());
+    }
+
+    function importPage() {
+      return {
+        sidebarOpen: false, activeTab: 'students', importing: false,
+        exams: [], studentFile: null, studentPreview: [], studentColumns: [], studentResult: null,
+        akExamId: '', akSubjects: [], akSubjectId: '', akFile: null, akResult: null, imports: [],
+
+        async init() {
+          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          const data = await api('/api/exams?limit=100');
+          this.exams = data.exams || [];
+          this.loadHistory();
+        },
+
+        downloadStudentTemplate() {
+          const csv = 'rollNo,name,email,className,section,phone,parentEmail\nSTU001,John Doe,john@school.edu,10,A,1234567890,parent@email.com';
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'students_template.csv'; a.click();
+        },
+
+        downloadAkTemplate() {
+          const csv = 'qNo,correctAnswer,maxMarks,acceptedVariants\n1,B,1,b\n2,Carbon dioxide,2,CO2|co2';
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'answer_key_template.csv'; a.click();
+        },
+
+        handleStudentFile(e) {
+          this.studentFile = e.target.files[0];
+          this.studentResult = null;
+          if (!this.studentFile) return;
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const lines = ev.target.result.split('\n').filter(l => l.trim());
+            if (lines.length < 2) return;
+            this.studentColumns = lines[0].split(',').map(c => c.trim());
+            this.studentPreview = [];
+            for (let i = 1; i < Math.min(6, lines.length); i++) {
+              const vals = lines[i].split(',');
+              const row = {};
+              this.studentColumns.forEach((col, idx) => { row[col] = vals[idx]?.trim() || ''; });
+              this.studentPreview.push(row);
+            }
+          };
+          reader.readAsText(this.studentFile);
+        },
+
+        async importStudents() {
+          if (!this.studentFile) return;
+          this.importing = true;
+          const fd = new FormData();
+          fd.append('file', this.studentFile);
+          const token = localStorage.getItem('auth_token');
+          try {
+            const res = await fetch('/api/csv/import/students', {
+              method: 'POST', body: fd,
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            this.studentResult = await res.json();
+          } catch (e) { alert(e.message); }
+          this.importing = false;
+          this.loadHistory();
+        },
+
+        async loadAkSubjects() {
+          if (!this.akExamId) { this.akSubjects = []; return; }
+          const data = await api(`/api/exams/${this.akExamId}/subjects`);
+          this.akSubjects = data.subjects || [];
+        },
+
+        async importAnswerKey() {
+          if (!this.akFile || !this.akSubjectId) return;
+          this.importing = true;
+          const fd = new FormData();
+          fd.append('file', this.akFile);
+          const token = localStorage.getItem('auth_token');
+          try {
+            const res = await fetch(`/api/csv/import/answer-key?subjectId=${this.akSubjectId}`, {
+              method: 'POST', body: fd,
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            this.akResult = await res.json();
+          } catch (e) { alert(e.message); }
+          this.importing = false;
+        },
+
+        async loadHistory() {
+          const data = await api('/api/csv/imports');
+          this.imports = data.imports || [];
+        },
+
+        logout() { localStorage.removeItem('auth_token'); window.location.href = '/login.html'; }
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics - AI Evaluation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="analyticsPage()" x-init="init()">
+  <aside class="fixed inset-y-0 left-0 w-64 bg-indigo-700 text-white transform transition-transform z-30"
+         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
+    <div class="p-6 text-xl font-bold border-b border-indigo-600">AI Evaluation</div>
+    <nav class="mt-4 space-y-1 px-3">
+      <a href="/dashboard.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Dashboard</a>
+      <a href="/exams.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Exams</a>
+      <a href="/upload.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Upload</a>
+      <a href="/review.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Review</a>
+      <a href="/results.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Results</a>
+      <a href="/analytics.html" class="block px-4 py-2.5 rounded-lg bg-indigo-800">Analytics</a>
+      <a href="/import.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Import</a>
+      <a href="#" @click.prevent="logout()" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600 mt-8">Logout</a>
+    </nav>
+  </aside>
+
+  <div class="lg:hidden fixed top-0 left-0 right-0 bg-indigo-700 text-white p-4 z-20 flex items-center">
+    <button @click="sidebarOpen = !sidebarOpen" class="mr-4">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <span class="font-bold">Analytics</span>
+  </div>
+
+  <main class="lg:ml-64 p-6 pt-20 lg:pt-6">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">Analytics Dashboard</h1>
+
+    <!-- Exam Selector -->
+    <div class="mb-6">
+      <select x-model="selectedExam" @change="loadAnalytics()" class="border rounded-lg px-4 py-2.5 w-full max-w-md">
+        <option value="">Select an Exam</option>
+        <template x-for="exam in exams" :key="exam._id">
+          <option :value="exam._id" x-text="exam.name"></option>
+        </template>
+      </select>
+    </div>
+
+    <div x-show="selectedExam">
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div class="text-sm text-gray-500">Total Students</div>
+          <div class="text-3xl font-bold text-indigo-700 mt-1" x-text="overview.totalStudents"></div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div class="text-sm text-gray-500">Pass Rate</div>
+          <div class="text-3xl font-bold text-green-600 mt-1" x-text="overview.passRate + '%'"></div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div class="text-sm text-gray-500">Class Average</div>
+          <div class="text-3xl font-bold text-indigo-700 mt-1" x-text="overview.classAverage + '%'"></div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div class="text-sm text-gray-500">Top Score</div>
+          <div class="text-3xl font-bold text-amber-600 mt-1" x-text="overview.highestScore"></div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 class="font-semibold text-gray-700 mb-4">Subject-wise Average Marks</h3>
+          <canvas id="subjectChart"></canvas>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 class="font-semibold text-gray-700 mb-4">Grade Distribution</h3>
+          <canvas id="gradeChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Class Comparison -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h3 class="font-semibold text-gray-700 mb-4">Class Comparison</h3>
+        <canvas id="classChart"></canvas>
+      </div>
+
+      <!-- Top Performers -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h3 class="font-semibold text-gray-700 mb-4">Top Performers</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-indigo-700 text-white">
+              <tr>
+                <th class="px-4 py-3 text-left">Rank</th>
+                <th class="px-4 py-3 text-left">Name</th>
+                <th class="px-4 py-3 text-left">Roll No</th>
+                <th class="px-4 py-3 text-center">Marks</th>
+                <th class="px-4 py-3 text-center">%</th>
+                <th class="px-4 py-3 text-center">Grade</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(p, idx) in topPerformers" :key="idx">
+                <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
+                  <td class="px-4 py-3 font-medium" x-text="p.rank"></td>
+                  <td class="px-4 py-3" x-text="p.studentName"></td>
+                  <td class="px-4 py-3" x-text="p.rollNo"></td>
+                  <td class="px-4 py-3 text-center font-medium" x-text="p.totalMarks"></td>
+                  <td class="px-4 py-3 text-center" x-text="p.percentage + '%'"></td>
+                  <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700" x-text="p.grade"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Teacher Activity (superadmin only) -->
+      <div x-show="userRole === 'superadmin'" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h3 class="font-semibold text-gray-700 mb-4">Teacher Activity</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-indigo-700 text-white">
+              <tr>
+                <th class="px-4 py-3 text-left">Teacher</th>
+                <th class="px-4 py-3 text-center">Evaluations Approved</th>
+                <th class="px-4 py-3 text-center">Marks Overridden</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(t, idx) in teachers" :key="idx">
+                <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
+                  <td class="px-4 py-3" x-text="t.teacherName"></td>
+                  <td class="px-4 py-3 text-center" x-text="t.evaluationsApproved"></td>
+                  <td class="px-4 py-3 text-center" x-text="t.marksOverridden"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      return fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers } }).then(r => r.json());
+    }
+
+    function analyticsPage() {
+      return {
+        sidebarOpen: false,
+        exams: [],
+        selectedExam: '',
+        userRole: '',
+        overview: {},
+        topPerformers: [],
+        teachers: [],
+        subjectChart: null,
+        gradeChart: null,
+        classChart: null,
+
+        async init() {
+          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          try {
+            const payload = JSON.parse(atob(localStorage.getItem('auth_token').split('.')[1]));
+            this.userRole = payload.role;
+          } catch(e) {}
+          const data = await api('/api/exams?limit=100');
+          this.exams = data.exams || [];
+        },
+
+        async loadAnalytics() {
+          if (!this.selectedExam) return;
+          const id = this.selectedExam;
+
+          const [ov, sp, gd, tp, cc] = await Promise.all([
+            api(`/api/analytics/overview/${id}`),
+            api(`/api/analytics/subject-performance/${id}`),
+            api(`/api/analytics/grade-distribution/${id}`),
+            api(`/api/analytics/top-performers/${id}?limit=10`),
+            api(`/api/analytics/class-comparison?examId=${id}`)
+          ]);
+
+          this.overview = ov;
+          this.topPerformers = tp.topPerformers || [];
+
+          // Subject chart
+          if (this.subjectChart) this.subjectChart.destroy();
+          const subjects = sp.subjects || [];
+          this.subjectChart = new Chart(document.getElementById('subjectChart'), {
+            type: 'bar',
+            data: {
+              labels: subjects.map(s => s.subjectName),
+              datasets: [{
+                label: 'Average Marks',
+                data: subjects.map(s => s.avgMarks),
+                backgroundColor: '#818cf8'
+              }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+          });
+
+          // Grade chart
+          if (this.gradeChart) this.gradeChart.destroy();
+          const dist = gd.distribution || [];
+          this.gradeChart = new Chart(document.getElementById('gradeChart'), {
+            type: 'doughnut',
+            data: {
+              labels: dist.map(d => d.grade),
+              datasets: [{
+                data: dist.map(d => d.count),
+                backgroundColor: ['#4338ca', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe']
+              }]
+            },
+            options: { responsive: true }
+          });
+
+          // Class comparison chart
+          if (this.classChart) this.classChart.destroy();
+          const comp = cc.comparison || [];
+          this.classChart = new Chart(document.getElementById('classChart'), {
+            type: 'bar',
+            data: {
+              labels: comp.map(c => c.group),
+              datasets: [{
+                label: 'Average Marks',
+                data: comp.map(c => c.avgMarks),
+                backgroundColor: '#6366f1'
+              }, {
+                label: 'Students',
+                data: comp.map(c => c.studentCount),
+                backgroundColor: '#a5b4fc'
+              }]
+            },
+            options: { responsive: true }
+          });
+
+          // Teacher activity
+          if (this.userRole === 'superadmin') {
+            const ta = await api('/api/analytics/teacher-activity');
+            this.teachers = ta.teachers || [];
+          }
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Detail - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="reviewDetailApp()" x-init="init()">
+
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <div class="flex items-center gap-3">
+        <a href="/review.html" class="text-gray-400 hover:text-gray-600 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </a>
+        <h1 class="text-xl font-bold text-gray-900">Evaluation Review</h1>
+      </div>
+    </header>
+
+    <!-- Loading -->
+    <div x-show="pageLoading" class="flex items-center justify-center py-20">
+      <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+      </svg>
+    </div>
+
+    <div x-show="!pageLoading" x-cloak>
+      <!-- Split Layout -->
+      <div class="flex flex-col lg:flex-row">
+
+        <!-- LEFT: Image Viewer (60%) -->
+        <div class="lg:w-[60%] p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-gray-700">
+                Scanned Page <span x-text="currentImageIdx + 1"></span> / <span x-text="images.length"></span>
+              </h3>
+              <div class="flex items-center gap-2">
+                <!-- Zoom controls -->
+                <button @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)"
+                        class="w-8 h-8 border border-gray-300 rounded-lg flex items-center justify-center text-gray-600 hover:bg-gray-50 transition" title="Zoom out">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                </button>
+                <span class="text-xs text-gray-500 w-10 text-center" x-text="Math.round(zoomLevel * 100) + '%'"></span>
+                <button @click="zoomLevel = Math.min(3, zoomLevel + 0.25)"
+                        class="w-8 h-8 border border-gray-300 rounded-lg flex items-center justify-center text-gray-600 hover:bg-gray-50 transition" title="Zoom in">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </button>
+                <button @click="zoomLevel = 1"
+                        class="text-xs text-indigo-600 hover:text-indigo-800 font-medium ml-1">Reset</button>
+              </div>
+            </div>
+
+            <!-- Image container -->
+            <div class="border border-gray-200 rounded-lg overflow-auto bg-gray-50" style="max-height: 70vh;">
+              <img x-show="images.length > 0"
+                   :src="images[currentImageIdx]?.url || images[currentImageIdx]"
+                   :style="'transform: scale(' + zoomLevel + '); transform-origin: top left;'"
+                   class="max-w-full transition-transform"
+                   :alt="'Page ' + (currentImageIdx + 1)">
+              <div x-show="images.length === 0" class="py-20 text-center text-gray-400">No images available</div>
+            </div>
+
+            <!-- Page navigation -->
+            <div x-show="images.length > 1" class="flex items-center justify-center gap-3 mt-4">
+              <button @click="currentImageIdx = Math.max(0, currentImageIdx - 1)" :disabled="currentImageIdx === 0"
+                      class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                Prev
+              </button>
+              <div class="flex gap-1">
+                <template x-for="(img, idx) in images" :key="idx">
+                  <button @click="currentImageIdx = idx"
+                          :class="idx === currentImageIdx ? 'bg-indigo-700 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
+                          class="w-8 h-8 rounded-md text-xs font-medium transition" x-text="idx + 1">
+                  </button>
+                </template>
+              </div>
+              <button @click="currentImageIdx = Math.min(images.length - 1, currentImageIdx + 1)" :disabled="currentImageIdx >= images.length - 1"
+                      class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Scoring Panel (40%) -->
+        <div class="lg:w-[40%] p-4 sm:p-6 space-y-4 lg:overflow-y-auto" style="max-height: calc(100vh - 65px);">
+
+          <!-- Student Info Card -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase mb-3">Student Information</h3>
+            <div class="space-y-2">
+              <div class="flex justify-between">
+                <span class="text-sm text-gray-500">Name</span>
+                <span class="text-sm font-medium text-gray-900" x-text="evaluation.student?.name || evaluation.studentName || '-'"></span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-sm text-gray-500">Roll No</span>
+                <span class="text-sm font-medium text-gray-900" x-text="evaluation.student?.rollNo || evaluation.rollNo || '-'"></span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-sm text-gray-500">Class</span>
+                <span class="text-sm font-medium text-gray-900" x-text="evaluation.student?.class || evaluation.className || '-'"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Score Summary -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase mb-3">Score Summary</h3>
+            <div class="flex items-center gap-4 mb-3">
+              <div class="text-3xl font-bold text-gray-900">
+                <span x-text="evaluation.totalMarks ?? evaluation.aiMarks ?? 0"></span>
+                <span class="text-lg text-gray-400 font-normal">/ <span x-text="evaluation.maxMarks ?? 0"></span></span>
+              </div>
+              <div class="flex flex-col gap-1">
+                <span :class="evaluation.grade ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600'"
+                      class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
+                      x-text="evaluation.grade || 'N/A'"></span>
+                <span :class="evaluation.passed || evaluation.pass ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+                      class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
+                      x-text="(evaluation.passed || evaluation.pass) ? 'PASS' : 'FAIL'"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question Breakdown -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase mb-3">Question Breakdown</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-500 border-b border-gray-100">
+                    <th class="pb-2 font-medium">Q.No</th>
+                    <th class="pb-2 font-medium">Student Ans</th>
+                    <th class="pb-2 font-medium">Correct Ans</th>
+                    <th class="pb-2 font-medium">AI Marks</th>
+                    <th class="pb-2 font-medium">Max</th>
+                    <th class="pb-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                  <template x-for="(q, qi) in questions" :key="qi">
+                    <tr :class="q.modified ? 'bg-amber-50' : ''">
+                      <td class="py-2.5 font-medium text-gray-900" x-text="q.questionNo || (qi + 1)"></td>
+                      <td class="py-2.5 text-gray-600 max-w-[80px] truncate" :title="q.studentAnswer || '-'" x-text="q.studentAnswer || '-'"></td>
+                      <td class="py-2.5 text-gray-600 max-w-[80px] truncate" :title="q.correctAnswer || '-'" x-text="q.correctAnswer || '-'"></td>
+                      <td class="py-2.5 font-semibold" :class="q.modified ? 'text-amber-700' : 'text-gray-900'" x-text="q.marks ?? q.aiMarks ?? 0"></td>
+                      <td class="py-2.5 text-gray-500" x-text="q.maxMarks ?? 0"></td>
+                      <td class="py-2.5">
+                        <button @click="openEdit(qi)"
+                                class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Inline Edit Form -->
+            <div x-show="editingIndex !== null" x-cloak
+                 class="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <h4 class="text-sm font-semibold text-indigo-800 mb-3">
+                Edit Q.<span x-text="editingIndex !== null ? (questions[editingIndex]?.questionNo || editingIndex + 1) : ''"></span>
+              </h4>
+              <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-700 mb-1">New Marks (0 - <span x-text="editingIndex !== null ? (questions[editingIndex]?.maxMarks ?? 0) : 0"></span>)</label>
+                <input type="number" x-model.number="editMarks" :min="0" :max="editingIndex !== null ? (questions[editingIndex]?.maxMarks ?? 100) : 100"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+              </div>
+              <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-700 mb-1">Reason for change</label>
+                <textarea x-model="editReason" rows="2"
+                          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
+                          placeholder="Explain why marks are being changed..."></textarea>
+              </div>
+              <div class="flex items-center gap-2">
+                <button @click="saveOverride()" :disabled="overrideSaving"
+                        class="bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 inline-flex items-center gap-2">
+                  <svg x-show="overrideSaving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Save
+                </button>
+                <button @click="editingIndex = null" class="text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition">Cancel</button>
+              </div>
+              <p x-show="overrideError" x-cloak class="mt-2 text-xs text-red-600" x-text="overrideError"></p>
+            </div>
+          </div>
+
+          <!-- Override History (Collapsible) -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+            <button @click="showHistory = !showHistory" class="w-full flex items-center justify-between p-5 text-left">
+              <h3 class="text-sm font-semibold text-gray-500 uppercase">Override History</h3>
+              <svg :class="showHistory ? 'rotate-180' : ''" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+            <div x-show="showHistory" x-cloak class="px-5 pb-5">
+              <div x-show="overrides.length === 0" class="text-sm text-gray-400 text-center py-4">No overrides recorded.</div>
+              <div class="space-y-3">
+                <template x-for="(o, oi) in overrides" :key="oi">
+                  <div class="border border-gray-100 rounded-lg p-3 text-sm">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="font-medium text-gray-900">Q.<span x-text="o.questionNo || '-'"></span></span>
+                      <span class="text-xs text-gray-400" x-text="formatDate(o.createdAt || o.date)"></span>
+                    </div>
+                    <p class="text-gray-600"><span x-text="o.previousMarks ?? '-'"></span> &rarr; <span class="font-semibold" x-text="o.newMarks ?? '-'"></span></p>
+                    <p class="text-xs text-gray-500 mt-1" x-text="o.reason || ''"></p>
+                    <p class="text-xs text-gray-400 mt-0.5">By: <span x-text="o.modifiedBy?.name || o.teacherName || '-'"></span></p>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Bottom Action Bar -->
+      <div class="sticky bottom-0 bg-white border-t border-gray-200 px-4 sm:px-6 py-4">
+        <div class="max-w-5xl mx-auto flex items-center justify-between">
+          <a href="/review.html" class="text-gray-600 hover:text-gray-800 text-sm font-medium flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to List
+          </a>
+          <div class="flex items-center gap-3">
+            <!-- Success message -->
+            <span x-show="actionSuccess" x-cloak x-transition class="text-sm text-green-600 font-medium" x-text="actionSuccess"></span>
+
+            <button @click="flagForReview()" :disabled="actionLoading"
+                    class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 inline-flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
+              Flag for Review
+            </button>
+            <button @click="approveEvaluation()" :disabled="actionLoading"
+                    class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 inline-flex items-center gap-2">
+              <svg x-show="actionLoading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              <svg x-show="!actionLoading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              Approve
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      return fetch(url, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers }
+      }).then(r => r.json());
+    }
+
+    function reviewDetailApp() {
+      return {
+        sidebarOpen: false,
+        currentPage: 'review',
+        userName: '',
+        userRole: '',
+        pageLoading: true,
+
+        evalId: '',
+        evaluation: {},
+        questions: [],
+        images: [],
+        currentImageIdx: 0,
+        zoomLevel: 1,
+
+        // Edit
+        editingIndex: null,
+        editMarks: 0,
+        editReason: '',
+        overrideSaving: false,
+        overrideError: '',
+
+        // Overrides
+        overrides: [],
+        showHistory: false,
+
+        // Actions
+        actionLoading: false,
+        actionSuccess: '',
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        async init() {
+          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+
+          const params = new URLSearchParams(window.location.search);
+          this.evalId = params.get('evalId');
+          if (!this.evalId) { window.location.href = '/review.html'; return; }
+
+          await Promise.all([this.loadEvaluation(), this.loadOverrides()]);
+          this.pageLoading = false;
+        },
+
+        async loadEvaluation() {
+          try {
+            const data = await api('/api/review/evaluations/' + this.evalId);
+            this.evaluation = data.evaluation || data.data || data;
+            this.questions = this.evaluation.questions || this.evaluation.answers || [];
+            this.images = this.evaluation.images || this.evaluation.batch?.images || this.evaluation.scannedImages || [];
+          } catch (e) {
+            console.error('Failed to load evaluation:', e);
+          }
+        },
+
+        async loadOverrides() {
+          try {
+            const data = await api('/api/review/overrides/' + this.evalId);
+            this.overrides = data.overrides || data.data || data || [];
+          } catch (e) {
+            console.error('Failed to load overrides:', e);
+          }
+        },
+
+        openEdit(questionIndex) {
+          this.editingIndex = questionIndex;
+          this.editMarks = this.questions[questionIndex].marks ?? this.questions[questionIndex].aiMarks ?? 0;
+          this.editReason = '';
+          this.overrideError = '';
+        },
+
+        async saveOverride() {
+          if (!this.editReason.trim()) {
+            this.overrideError = 'Please provide a reason for the change.';
+            return;
+          }
+          this.overrideSaving = true;
+          this.overrideError = '';
+          try {
+            const q = this.questions[this.editingIndex];
+            const payload = {
+              questionIndex: this.editingIndex,
+              questionNo: q.questionNo || this.editingIndex + 1,
+              previousMarks: q.marks ?? q.aiMarks ?? 0,
+              newMarks: this.editMarks,
+              reason: this.editReason
+            };
+
+            const data = await api('/api/review/evaluations/' + this.evalId + '/override', {
+              method: 'POST',
+              body: JSON.stringify(payload)
+            });
+
+            // Update local state
+            this.questions[this.editingIndex].marks = this.editMarks;
+            this.questions[this.editingIndex].modified = true;
+
+            // Recalc total if possible
+            if (data.evaluation) {
+              this.evaluation = data.evaluation;
+              this.questions = data.evaluation.questions || data.evaluation.answers || this.questions;
+            }
+
+            this.editingIndex = null;
+            await this.loadOverrides();
+          } catch (e) {
+            this.overrideError = e.message || 'Failed to save override.';
+            console.error(e);
+          } finally {
+            this.overrideSaving = false;
+          }
+        },
+
+        async approveEvaluation() {
+          this.actionLoading = true;
+          this.actionSuccess = '';
+          try {
+            await api('/api/review/evaluations/' + this.evalId + '/approve', { method: 'POST' });
+            this.evaluation.status = 'approved';
+            this.actionSuccess = 'Evaluation approved!';
+            setTimeout(() => this.actionSuccess = '', 3000);
+          } catch (e) {
+            console.error('Failed to approve:', e);
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        async flagForReview() {
+          this.actionLoading = true;
+          this.actionSuccess = '';
+          try {
+            await api('/api/review/evaluations/' + this.evalId + '/flag', { method: 'POST' });
+            this.evaluation.status = 'flagged';
+            this.actionSuccess = 'Flagged for review!';
+            setTimeout(() => this.actionSuccess = '', 3000);
+          } catch (e) {
+            console.error('Failed to flag:', e);
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          return new Date(dateStr).toLocaleString();
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Results - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="resultsApp()" x-init="init()">
+
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Results Management</h1>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <!-- Loading -->
+      <div x-show="pageLoading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+        </svg>
+      </div>
+
+      <div x-show="!pageLoading" x-cloak>
+        <!-- No exam selected -->
+        <div x-show="!examId" class="text-center py-20">
+          <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <h3 class="text-lg font-medium text-gray-500">No Exam Selected</h3>
+          <p class="text-gray-400 mt-1">Please select an exam from the Exams page to view results.</p>
+          <a href="/exams.html" class="mt-4 inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm">
+            Go to Exams
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+
+        <!-- Exam Results Content -->
+        <div x-show="examId">
+          <!-- Exam Header -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-3">
+                  <h2 class="text-lg font-bold text-gray-900" x-text="examInfo.name || 'Exam Results'"></h2>
+                  <span x-show="examInfo.published"
+                        class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Published</span>
+                  <span x-show="!examInfo.published"
+                        class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Unpublished</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-1" x-text="examInfo.date ? new Date(examInfo.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''"></p>
+              </div>
+              <div class="flex items-center gap-2 text-sm text-gray-500">
+                <span x-text="(results.length || 0) + ' students'"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions Bar -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+            <div class="flex flex-wrap gap-2">
+              <button @click="generateAllGradeSheets()" :disabled="actionLoading"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-700 text-white text-sm font-medium rounded-lg hover:bg-indigo-800 disabled:opacity-50 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Generate All Grade Sheets
+              </button>
+              <button @click="exportCSV()" :disabled="actionLoading"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Export CSV
+              </button>
+              <button @click="exportExcel()" :disabled="actionLoading"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Export Excel
+              </button>
+              <button @click="pushToMCSE()" :disabled="actionLoading"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                Push to MCSE
+              </button>
+              <button @click="showPublishModal = true" :disabled="actionLoading"
+                      x-show="userRole === 'principal' || userRole === 'superadmin'"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Publish Results
+              </button>
+            </div>
+          </div>
+
+          <!-- Alert messages -->
+          <div x-show="alertMessage" x-cloak
+               :class="alertType === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'"
+               class="mb-4 p-3 border rounded-lg text-sm flex items-center gap-2">
+            <span x-text="alertMessage"></span>
+            <button @click="alertMessage = ''" class="ml-auto font-bold">&times;</button>
+          </div>
+
+          <!-- Students Table -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50 border-b border-gray-200">
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Roll No</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Marks</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">%</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Result</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="student in results" :key="student._id || student.studentId">
+                    <tr class="hover:bg-gray-50 transition">
+                      <td class="px-5 py-3 font-medium text-gray-900" x-text="student.rollNo || '-'"></td>
+                      <td class="px-5 py-3 text-gray-700" x-text="student.name || student.studentName || '-'"></td>
+                      <td class="px-5 py-3 text-gray-700">
+                        <span x-text="student.totalMarks ?? student.marks ?? '-'"></span>
+                        <span class="text-gray-400" x-show="student.maxMarks"> / <span x-text="student.maxMarks"></span></span>
+                      </td>
+                      <td class="px-5 py-3 text-gray-700" x-text="student.percentage != null ? student.percentage.toFixed(1) + '%' : '-'"></td>
+                      <td class="px-5 py-3">
+                        <span :class="{
+                          'bg-green-100 text-green-800': student.grade === 'A' || student.grade === 'A+',
+                          'bg-blue-100 text-blue-800': student.grade === 'B' || student.grade === 'B+',
+                          'bg-yellow-100 text-yellow-800': student.grade === 'C' || student.grade === 'C+',
+                          'bg-orange-100 text-orange-800': student.grade === 'D',
+                          'bg-red-100 text-red-800': student.grade === 'F' || student.grade === 'E'
+                        }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
+                           x-text="student.grade || '-'"></span>
+                      </td>
+                      <td class="px-5 py-3">
+                        <span :class="{
+                          'bg-green-100 text-green-800': student.status === 'evaluated' || student.status === 'approved',
+                          'bg-yellow-100 text-yellow-800': student.status === 'pending',
+                          'bg-blue-100 text-blue-800': student.status === 'processing',
+                          'bg-red-100 text-red-800': student.status === 'failed'
+                        }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize"
+                           x-text="student.status || 'pending'"></span>
+                      </td>
+                      <td class="px-5 py-3">
+                        <span :class="student.passFail === 'Pass' || student.passed ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
+                              x-text="student.passFail || (student.passed ? 'Pass' : 'Fail')"></span>
+                      </td>
+                      <td class="px-5 py-3">
+                        <div class="flex items-center gap-2">
+                          <button @click="generateInvoice(student)"
+                                  class="text-indigo-600 hover:text-indigo-800 text-xs font-medium hover:underline"
+                                  :disabled="student.invoiceLoading">
+                            <span x-show="!student.invoiceLoading">Invoice</span>
+                            <span x-show="student.invoiceLoading" class="flex items-center gap-1">
+                              <svg class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                              ...
+                            </span>
+                          </button>
+                          <button @click="generateGradeSheet(student)"
+                                  class="text-gray-600 hover:text-gray-800 text-xs font-medium hover:underline"
+                                  :disabled="student.gradeSheetLoading">
+                            <span x-show="!student.gradeSheetLoading">Grade Sheet</span>
+                            <span x-show="student.gradeSheetLoading" class="flex items-center gap-1">
+                              <svg class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                              ...
+                            </span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="results.length === 0">
+                    <td colspan="8" class="px-5 py-10 text-center text-gray-400">No results found for this exam.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Publish Confirmation Modal -->
+  <div x-show="showPublishModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50" @click="showPublishModal = false"></div>
+    <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+      <h3 class="text-lg font-bold text-gray-900 mb-2">Publish Results</h3>
+      <p class="text-sm text-gray-600 mb-6">Are you sure you want to publish results for this exam? Once published, students will be able to view their results. This action cannot be undone.</p>
+      <div class="flex justify-end gap-3">
+        <button @click="showPublishModal = false"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">Cancel</button>
+        <button @click="publishResults()"
+                :disabled="actionLoading"
+                class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition">
+          <span x-show="!actionLoading">Yes, Publish</span>
+          <span x-show="actionLoading" class="flex items-center gap-2">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            Publishing...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      return fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers } }).then(r => r.json());
+    }
+
+    function resultsApp() {
+      return {
+        sidebarOpen: false,
+        currentPage: 'results',
+        userName: '',
+        userRole: '',
+        pageLoading: true,
+        examId: '',
+        examInfo: {},
+        results: [],
+        showPublishModal: false,
+        actionLoading: false,
+        alertMessage: '',
+        alertType: 'success',
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        authHeaders() {
+          return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') };
+        },
+
+        async init() {
+          const token = localStorage.getItem('auth_token');
+          if (!token) { window.location.href = '/login.html'; return; }
+
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+
+          const params = new URLSearchParams(window.location.search);
+          this.examId = params.get('examId') || '';
+
+          if (!this.userName) {
+            try {
+              const res = await fetch('/api/auth/me', { headers: this.authHeaders() });
+              if (!res.ok) { this.logout(); return; }
+              const data = await res.json();
+              const user = data.user || data;
+              this.userName = user.name || user.email || '';
+              this.userRole = user.role || '';
+              localStorage.setItem('user_role', this.userRole);
+              localStorage.setItem('user_name', this.userName);
+            } catch (err) { this.logout(); return; }
+          }
+
+          if (this.examId) {
+            await this.loadResults();
+          }
+          this.pageLoading = false;
+        },
+
+        async loadResults() {
+          try {
+            const data = await api(`/api/results/exam-results-screen/${this.examId}`);
+            this.examInfo = {
+              name: data.examName || data.exam?.name || 'Exam',
+              date: data.examDate || data.exam?.date || data.exam?.createdAt || '',
+              published: data.published ?? data.exam?.published ?? false
+            };
+            const students = data.results || data.students || data.data || [];
+            this.results = students.map(s => ({ ...s, invoiceLoading: false, gradeSheetLoading: false }));
+          } catch (err) {
+            console.error('Failed to load results:', err);
+            this.showAlert('Failed to load results.', 'error');
+          }
+        },
+
+        showAlert(msg, type = 'success') {
+          this.alertMessage = msg;
+          this.alertType = type;
+          setTimeout(() => { this.alertMessage = ''; }, 5000);
+        },
+
+        async generateAllGradeSheets() {
+          this.actionLoading = true;
+          try {
+            const data = await api(`/api/results/gradesheet/${this.examId}/all`, { method: 'POST' });
+            if (data.url || data.downloadUrl) {
+              window.open(data.url || data.downloadUrl, '_blank');
+            }
+            this.showAlert('Grade sheets generated successfully.');
+          } catch (err) {
+            this.showAlert('Failed to generate grade sheets.', 'error');
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        async exportCSV() {
+          this.actionLoading = true;
+          try {
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`/api/csv/export/results?examId=${this.examId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `results_${this.examId}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            this.showAlert('CSV exported successfully.');
+          } catch (err) {
+            this.showAlert('Failed to export CSV.', 'error');
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        async exportExcel() {
+          this.actionLoading = true;
+          try {
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`/api/csv/export/results?examId=${this.examId}&format=xlsx`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `results_${this.examId}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            this.showAlert('Excel exported successfully.');
+          } catch (err) {
+            this.showAlert('Failed to export Excel.', 'error');
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        async pushToMCSE() {
+          this.actionLoading = true;
+          try {
+            const data = await api(`/api/csv/mcse/push/${this.examId}`);
+            this.showAlert(data.message || 'Successfully pushed to MCSE.');
+          } catch (err) {
+            this.showAlert('Failed to push to MCSE.', 'error');
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        async publishResults() {
+          this.actionLoading = true;
+          try {
+            const data = await api(`/api/results/publish/${this.examId}`, { method: 'POST' });
+            this.examInfo.published = true;
+            this.showPublishModal = false;
+            this.showAlert(data.message || 'Results published successfully.');
+          } catch (err) {
+            this.showAlert('Failed to publish results.', 'error');
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        async generateInvoice(student) {
+          student.invoiceLoading = true;
+          try {
+            const evalId = student._id || student.evaluationId || student.id;
+            const data = await api(`/api/results/invoice/${evalId}`, { method: 'POST' });
+            if (data.url || data.downloadUrl) {
+              window.open(data.url || data.downloadUrl, '_blank');
+            }
+            this.showAlert('Invoice generated.');
+          } catch (err) {
+            this.showAlert('Failed to generate invoice.', 'error');
+          } finally {
+            student.invoiceLoading = false;
+          }
+        },
+
+        async generateGradeSheet(student) {
+          student.gradeSheetLoading = true;
+          try {
+            const studentId = student.studentId || student._id || student.id;
+            const data = await api(`/api/results/gradesheet/${this.examId}/${studentId}`, { method: 'POST' });
+            if (data.url || data.downloadUrl) {
+              window.open(data.url || data.downloadUrl, '_blank');
+            }
+            this.showAlert('Grade sheet generated.');
+          } catch (err) {
+            this.showAlert('Failed to generate grade sheet.', 'error');
+          } finally {
+            student.gradeSheetLoading = false;
+          }
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>

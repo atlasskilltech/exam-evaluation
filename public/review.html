@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Evaluations - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="reviewApp()" x-init="init()">
+
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Review Evaluations</h1>
+    </header>
+
+    <main class="p-4 sm:p-6">
+
+      <!-- Tabs -->
+      <div class="flex flex-wrap gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
+        <template x-for="tab in tabs" :key="tab.value">
+          <button @click="activeTab = tab.value; currentPage_num = 1; loadEvaluations()"
+                  :class="activeTab === tab.value ? 'bg-white text-indigo-700 shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-800'"
+                  class="px-4 py-2 rounded-md text-sm transition" x-text="tab.label">
+          </button>
+        </template>
+      </div>
+
+      <!-- Search & Bulk Actions -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div class="relative w-full sm:w-80">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input type="text" x-model="searchQuery" @input.debounce.400ms="currentPage_num = 1; loadEvaluations()"
+                 placeholder="Search by roll number or student name..."
+                 class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+        </div>
+        <button x-show="selectedIds.length > 0" @click="bulkApprove()" :disabled="bulkLoading"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 inline-flex items-center gap-2 flex-shrink-0">
+          <svg x-show="bulkLoading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          Bulk Approve (<span x-text="selectedIds.length"></span>)
+        </button>
+      </div>
+
+      <!-- Loading -->
+      <div x-show="loading" class="flex items-center justify-center py-16">
+        <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+      </div>
+
+      <!-- Table -->
+      <div x-show="!loading" x-cloak class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b border-gray-100 bg-gray-50">
+                <th class="px-4 py-3 font-medium w-10">
+                  <input type="checkbox" @change="toggleSelectAll($event)" :checked="allSelected"
+                         class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                </th>
+                <th class="px-4 py-3 font-medium">Student Name</th>
+                <th class="px-4 py-3 font-medium">Roll No</th>
+                <th class="px-4 py-3 font-medium">Subject</th>
+                <th class="px-4 py-3 font-medium">AI Marks</th>
+                <th class="px-4 py-3 font-medium">Status</th>
+                <th class="px-4 py-3 font-medium">Approved By</th>
+                <th class="px-4 py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <template x-for="evaluation in evaluations" :key="evaluation._id || evaluation.id">
+                <tr class="hover:bg-gray-50 transition cursor-pointer"
+                    @click="goToDetail(evaluation._id || evaluation.id)">
+                  <td class="px-4 py-3" @click.stop>
+                    <input type="checkbox" :value="evaluation._id || evaluation.id"
+                           @change="toggleSelect(evaluation._id || evaluation.id)"
+                           :checked="selectedIds.includes(evaluation._id || evaluation.id)"
+                           class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                  </td>
+                  <td class="px-4 py-3 font-medium text-gray-900" x-text="evaluation.student?.name || evaluation.studentName || '-'"></td>
+                  <td class="px-4 py-3 text-gray-600" x-text="evaluation.student?.rollNo || evaluation.rollNo || '-'"></td>
+                  <td class="px-4 py-3 text-gray-600" x-text="evaluation.subject?.name || evaluation.subjectName || '-'"></td>
+                  <td class="px-4 py-3 font-semibold text-gray-900" x-text="(evaluation.totalMarks ?? evaluation.aiMarks ?? '-') + ' / ' + (evaluation.maxMarks ?? '-')"></td>
+                  <td class="px-4 py-3">
+                    <span :class="{
+                      'bg-yellow-100 text-yellow-800': evaluation.status === 'ai_evaluated',
+                      'bg-orange-100 text-orange-800': evaluation.status === 'teacher_modified',
+                      'bg-green-100 text-green-800': evaluation.status === 'approved',
+                      'bg-amber-100 text-amber-800': evaluation.status === 'flagged',
+                      'bg-gray-100 text-gray-800': !['ai_evaluated','teacher_modified','approved','flagged'].includes(evaluation.status)
+                    }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize"
+                       x-text="statusLabel(evaluation.status)"></span>
+                  </td>
+                  <td class="px-4 py-3 text-gray-600 text-sm" x-text="evaluation.approvedBy?.name || evaluation.approvedByName || '-'"></td>
+                  <td class="px-4 py-3" @click.stop>
+                    <a :href="'/review-detail.html?evalId=' + (evaluation._id || evaluation.id)"
+                       class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                      Review
+                    </a>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="evaluations.length === 0">
+                <td colspan="8" class="px-4 py-12 text-center text-gray-400">No evaluations found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="totalPages > 1" class="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+          <p class="text-sm text-gray-500">
+            Showing <span x-text="((currentPage_num - 1) * pageSize) + 1"></span>-<span x-text="Math.min(currentPage_num * pageSize, totalItems)"></span> of <span x-text="totalItems"></span>
+          </p>
+          <div class="flex items-center gap-1">
+            <button @click="currentPage_num--; loadEvaluations()" :disabled="currentPage_num <= 1"
+                    class="px-3 py-1.5 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              Prev
+            </button>
+            <template x-for="p in paginationPages()" :key="p">
+              <button @click="if (p !== '...') { currentPage_num = p; loadEvaluations(); }"
+                      :class="p === currentPage_num ? 'bg-indigo-700 text-white border-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
+                      :disabled="p === '...'"
+                      class="px-3 py-1.5 border rounded-md text-sm transition" x-text="p">
+              </button>
+            </template>
+            <button @click="currentPage_num++; loadEvaluations()" :disabled="currentPage_num >= totalPages"
+                    class="px-3 py-1.5 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      return fetch(url, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers }
+      }).then(r => r.json());
+    }
+
+    function reviewApp() {
+      return {
+        sidebarOpen: false,
+        currentPage: 'review',
+        userName: '',
+        userRole: '',
+
+        tabs: [
+          { label: 'All', value: '' },
+          { label: 'Pending Review', value: 'ai_evaluated' },
+          { label: 'Modified', value: 'teacher_modified' },
+          { label: 'Approved', value: 'approved' },
+          { label: 'Flagged', value: 'flagged' },
+        ],
+        activeTab: '',
+        searchQuery: '',
+        evaluations: [],
+        loading: true,
+        selectedIds: [],
+        bulkLoading: false,
+
+        currentPage_num: 1,
+        pageSize: 20,
+        totalItems: 0,
+        totalPages: 0,
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        get allSelected() {
+          return this.evaluations.length > 0 && this.evaluations.every(e => this.selectedIds.includes(e._id || e.id));
+        },
+
+        async init() {
+          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+          await this.loadEvaluations();
+        },
+
+        async loadEvaluations() {
+          this.loading = true;
+          this.selectedIds = [];
+          try {
+            let url = '/api/review/evaluations?page=' + this.currentPage_num + '&limit=' + this.pageSize;
+            if (this.activeTab) url += '&status=' + this.activeTab;
+            if (this.searchQuery) url += '&search=' + encodeURIComponent(this.searchQuery);
+
+            const data = await api(url);
+            this.evaluations = data.evaluations || data.data || data || [];
+            this.totalItems = data.total || data.totalCount || this.evaluations.length;
+            this.totalPages = data.totalPages || Math.ceil(this.totalItems / this.pageSize);
+          } catch (e) {
+            console.error('Failed to load evaluations:', e);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        statusLabel(status) {
+          const labels = {
+            ai_evaluated: 'AI Evaluated',
+            teacher_modified: 'Modified',
+            approved: 'Approved',
+            flagged: 'Flagged'
+          };
+          return labels[status] || status || 'Unknown';
+        },
+
+        toggleSelect(id) {
+          const idx = this.selectedIds.indexOf(id);
+          if (idx > -1) this.selectedIds.splice(idx, 1);
+          else this.selectedIds.push(id);
+        },
+
+        toggleSelectAll(event) {
+          if (event.target.checked) {
+            this.selectedIds = this.evaluations.map(e => e._id || e.id);
+          } else {
+            this.selectedIds = [];
+          }
+        },
+
+        async bulkApprove() {
+          if (this.selectedIds.length === 0) return;
+          this.bulkLoading = true;
+          try {
+            await api('/api/review/evaluations/bulk-approve', {
+              method: 'POST',
+              body: JSON.stringify({ evaluationIds: this.selectedIds })
+            });
+            await this.loadEvaluations();
+          } catch (e) {
+            console.error('Bulk approve failed:', e);
+          } finally {
+            this.bulkLoading = false;
+          }
+        },
+
+        goToDetail(evalId) {
+          window.location.href = '/review-detail.html?evalId=' + evalId;
+        },
+
+        paginationPages() {
+          const pages = [];
+          const total = this.totalPages;
+          const current = this.currentPage_num;
+          if (total <= 7) {
+            for (let i = 1; i <= total; i++) pages.push(i);
+          } else {
+            pages.push(1);
+            if (current > 3) pages.push('...');
+            for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+            if (current < total - 2) pages.push('...');
+            pages.push(total);
+          }
+          return pages;
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exams - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="examsApp()" x-init="init()">
+
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Exams</h1>
+      <div class="ml-auto">
+        <button @click="openCreateModal()"
+                class="inline-flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Create Exam
+        </button>
+      </div>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <!-- Exams Table -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b border-gray-100">
+                <th class="px-5 py-3 font-medium">Name</th>
+                <th class="px-5 py-3 font-medium">Date</th>
+                <th class="px-5 py-3 font-medium">Type</th>
+                <th class="px-5 py-3 font-medium">Status</th>
+                <th class="px-5 py-3 font-medium">Subjects</th>
+                <th class="px-5 py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <template x-for="exam in exams" :key="exam._id || exam.id">
+                <tr class="hover:bg-gray-50 transition">
+                  <td class="px-5 py-3 font-medium text-gray-900" x-text="exam.name"></td>
+                  <td class="px-5 py-3 text-gray-600" x-text="formatDate(exam.date)"></td>
+                  <td class="px-5 py-3">
+                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 uppercase"
+                          x-text="exam.type"></span>
+                  </td>
+                  <td class="px-5 py-3">
+                    <span :class="{
+                      'bg-gray-100 text-gray-700': exam.status === 'draft',
+                      'bg-blue-100 text-blue-800': exam.status === 'active',
+                      'bg-green-100 text-green-800': exam.status === 'published',
+                      'bg-red-100 text-red-800': exam.status === 'closed'
+                    }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize"
+                       x-text="exam.status || 'draft'"></span>
+                  </td>
+                  <td class="px-5 py-3 text-gray-600" x-text="exam.subjectsCount || exam.subjects?.length || 0"></td>
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-3">
+                      <button @click="openEditModal(exam)" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Edit</button>
+                      <button @click="confirmDelete(exam)" class="text-red-500 hover:text-red-700 text-xs font-medium">Delete</button>
+                      <a :href="'/exam-subjects.html?examId=' + (exam._id || exam.id)"
+                         class="text-gray-600 hover:text-gray-800 text-xs font-medium">Subjects</a>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="exams.length === 0 && !pageLoading">
+                <td colspan="6" class="px-5 py-8 text-center text-gray-400">No exams found. Create your first exam.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="totalPages > 1" class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+          <p class="text-sm text-gray-500">
+            Page <span x-text="currentPageNum"></span> of <span x-text="totalPages"></span>
+          </p>
+          <div class="flex gap-2">
+            <button @click="goToPage(currentPageNum - 1)" :disabled="currentPageNum <= 1"
+                    class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              Previous
+            </button>
+            <button @click="goToPage(currentPageNum + 1)" :disabled="currentPageNum >= totalPages"
+                    class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create/Edit Exam Modal -->
+  <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto"
+       @keydown.escape.window="showModal = false">
+    <div class="absolute inset-0 bg-black/50" @click="showModal = false"></div>
+    <div class="relative bg-white rounded-xl shadow-lg w-full max-w-lg p-6 z-10 mb-8" @click.stop>
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-semibold text-gray-900" x-text="editingExam ? 'Edit Exam' : 'Create Exam'"></h2>
+        <button @click="showModal = false" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal error -->
+      <div x-show="modalError" x-cloak class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+        <span x-text="modalError"></span>
+      </div>
+
+      <form @submit.prevent="saveExam" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Exam Name</label>
+          <input type="text" x-model="form.name" required
+                 class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm"
+                 placeholder="e.g., Final Term 2026">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+            <input type="date" x-model="form.date"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+            <select x-model="form.type"
+                    class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm">
+              <option value="mcq">MCQ</option>
+              <option value="descriptive">Descriptive</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Total Marks</label>
+            <input type="number" x-model.number="form.totalMarks" min="1"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm"
+                   placeholder="100">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Passing Marks</label>
+            <input type="number" x-model.number="form.passingMarks" min="0"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm"
+                   placeholder="35">
+          </div>
+        </div>
+
+        <!-- Grading Scale -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Grading Scale</label>
+          <div class="space-y-2 bg-gray-50 rounded-lg p-3">
+            <template x-for="(grade, idx) in form.gradingScale" :key="grade.grade">
+              <div class="flex items-center gap-2">
+                <span class="w-8 text-sm font-semibold text-gray-700" x-text="grade.grade"></span>
+                <input type="number" x-model.number="grade.min" min="0" max="100"
+                       class="w-20 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                       placeholder="Min">
+                <span class="text-gray-400 text-xs">to</span>
+                <input type="number" x-model.number="grade.max" min="0" max="100"
+                       class="w-20 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                       placeholder="Max">
+                <span class="text-gray-400 text-xs">%</span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" @click="showModal = false"
+                  class="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition">
+            Cancel
+          </button>
+          <button type="submit" :disabled="saving"
+                  class="flex-1 bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-60 flex items-center justify-center gap-2">
+            <svg x-show="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            <span x-text="saving ? 'Saving...' : (editingExam ? 'Update Exam' : 'Create Exam')"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       @keydown.escape.window="showDeleteModal = false">
+    <div class="absolute inset-0 bg-black/50" @click="showDeleteModal = false"></div>
+    <div class="relative bg-white rounded-xl shadow-lg w-full max-w-sm p-6 z-10" @click.stop>
+      <div class="text-center">
+        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">Delete Exam</h3>
+        <p class="text-sm text-gray-500 mb-5">
+          Are you sure you want to delete "<span x-text="deletingExam?.name" class="font-medium"></span>"? This action cannot be undone.
+        </p>
+        <div class="flex gap-3">
+          <button @click="showDeleteModal = false"
+                  class="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition">
+            Cancel
+          </button>
+          <button @click="deleteExam()" :disabled="deleting"
+                  class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-60">
+            <span x-text="deleting ? 'Deleting...' : 'Delete'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function examsApp() {
+      return {
+        sidebarOpen: false,
+        currentPage: 'exams',
+        userName: '',
+        userRole: '',
+        pageLoading: true,
+        exams: [],
+        currentPageNum: 1,
+        totalPages: 1,
+        perPage: 10,
+
+        showModal: false,
+        editingExam: null,
+        saving: false,
+        modalError: '',
+        form: {
+          name: '',
+          date: '',
+          totalMarks: 100,
+          passingMarks: 35,
+          type: 'descriptive',
+          gradingScale: [
+            { grade: 'A', min: 90, max: 100 },
+            { grade: 'B', min: 75, max: 89 },
+            { grade: 'C', min: 60, max: 74 },
+            { grade: 'D', min: 40, max: 59 },
+            { grade: 'F', min: 0, max: 39 }
+          ]
+        },
+
+        showDeleteModal: false,
+        deletingExam: null,
+        deleting: false,
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        authHeaders() {
+          return {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('auth_token')
+          };
+        },
+
+        async init() {
+          const token = localStorage.getItem('auth_token');
+          if (!token) { window.location.href = '/login.html'; return; }
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+          await this.loadExams();
+        },
+
+        async loadExams() {
+          this.pageLoading = true;
+          try {
+            const res = await fetch(`/api/exams?page=${this.currentPageNum}&limit=${this.perPage}`, {
+              headers: this.authHeaders()
+            });
+            if (!res.ok) throw new Error('Failed to load exams');
+            const data = await res.json();
+            this.exams = data.exams || data.data || data || [];
+            this.totalPages = data.totalPages || data.pages || Math.ceil((data.total || this.exams.length) / this.perPage) || 1;
+          } catch (err) {
+            console.error('Failed to load exams:', err);
+          } finally {
+            this.pageLoading = false;
+          }
+        },
+
+        goToPage(page) {
+          if (page < 1 || page > this.totalPages) return;
+          this.currentPageNum = page;
+          this.loadExams();
+        },
+
+        formatDate(date) {
+          if (!date) return '-';
+          return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        },
+
+        defaultGradingScale() {
+          return [
+            { grade: 'A', min: 90, max: 100 },
+            { grade: 'B', min: 75, max: 89 },
+            { grade: 'C', min: 60, max: 74 },
+            { grade: 'D', min: 40, max: 59 },
+            { grade: 'F', min: 0, max: 39 }
+          ];
+        },
+
+        openCreateModal() {
+          this.editingExam = null;
+          this.modalError = '';
+          this.form = {
+            name: '',
+            date: '',
+            totalMarks: 100,
+            passingMarks: 35,
+            type: 'descriptive',
+            gradingScale: this.defaultGradingScale()
+          };
+          this.showModal = true;
+        },
+
+        openEditModal(exam) {
+          this.editingExam = exam;
+          this.modalError = '';
+          this.form = {
+            name: exam.name || '',
+            date: exam.date ? exam.date.substring(0, 10) : '',
+            totalMarks: exam.totalMarks || 100,
+            passingMarks: exam.passingMarks || 35,
+            type: exam.type || 'descriptive',
+            gradingScale: exam.gradingScale && exam.gradingScale.length
+              ? JSON.parse(JSON.stringify(exam.gradingScale))
+              : this.defaultGradingScale()
+          };
+          this.showModal = true;
+        },
+
+        async saveExam() {
+          this.modalError = '';
+          if (!this.form.name.trim()) { this.modalError = 'Exam name is required'; return; }
+          this.saving = true;
+          try {
+            const payload = {
+              name: this.form.name.trim(),
+              date: this.form.date || undefined,
+              totalMarks: this.form.totalMarks,
+              passingMarks: this.form.passingMarks,
+              type: this.form.type,
+              gradingScale: this.form.gradingScale
+            };
+            let res;
+            if (this.editingExam) {
+              const id = this.editingExam._id || this.editingExam.id;
+              res = await fetch(`/api/exams/${id}`, {
+                method: 'PUT',
+                headers: this.authHeaders(),
+                body: JSON.stringify(payload)
+              });
+            } else {
+              res = await fetch('/api/exams', {
+                method: 'POST',
+                headers: this.authHeaders(),
+                body: JSON.stringify(payload)
+              });
+            }
+            if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data.message || 'Failed to save exam');
+            }
+            this.showModal = false;
+            await this.loadExams();
+          } catch (err) {
+            this.modalError = err.message;
+          } finally {
+            this.saving = false;
+          }
+        },
+
+        confirmDelete(exam) {
+          this.deletingExam = exam;
+          this.showDeleteModal = true;
+        },
+
+        async deleteExam() {
+          if (!this.deletingExam) return;
+          this.deleting = true;
+          try {
+            const id = this.deletingExam._id || this.deletingExam.id;
+            const res = await fetch(`/api/exams/${id}`, {
+              method: 'DELETE',
+              headers: this.authHeaders()
+            });
+            if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data.message || 'Failed to delete exam');
+            }
+            this.showDeleteModal = false;
+            this.deletingExam = null;
+            await this.loadExams();
+          } catch (err) {
+            alert(err.message);
+          } finally {
+            this.deleting = false;
+          }
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>

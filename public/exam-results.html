@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exam Results - AI Evaluation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="examResultsPage()" x-init="init()">
+  <aside class="fixed inset-y-0 left-0 w-64 bg-indigo-700 text-white transform transition-transform z-30"
+         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
+    <div class="p-6 text-xl font-bold border-b border-indigo-600">AI Evaluation</div>
+    <nav class="mt-4 space-y-1 px-3">
+      <a href="/dashboard.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Dashboard</a>
+      <a href="/exams.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Exams</a>
+      <a href="/upload.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Upload</a>
+      <a href="/review.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Review</a>
+      <a href="/results.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Results</a>
+      <a href="/analytics.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Analytics</a>
+      <a href="/import.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Import</a>
+      <a href="#" @click.prevent="logout()" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600 mt-8">Logout</a>
+    </nav>
+  </aside>
+
+  <div class="lg:hidden fixed top-0 left-0 right-0 bg-indigo-700 text-white p-4 z-20 flex items-center">
+    <button @click="sidebarOpen = !sidebarOpen" class="mr-4">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <span class="font-bold">Results</span>
+  </div>
+
+  <main class="lg:ml-64 p-6 pt-20 lg:pt-6">
+    <!-- Exam Selector -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900 mb-4">Exam Results</h1>
+      <select x-model="selectedExam" @change="loadResults()" class="border rounded-lg px-4 py-2.5 w-full max-w-md">
+        <option value="">Select an Exam</option>
+        <template x-for="exam in exams" :key="exam._id">
+          <option :value="exam._id" x-text="exam.name"></option>
+        </template>
+      </select>
+    </div>
+
+    <!-- Student View -->
+    <div x-show="isStudent && selectedExam && myResult">
+      <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-xl p-8 text-white mb-6">
+        <h2 class="text-xl font-medium mb-1">Your Results</h2>
+        <p class="text-indigo-200" x-text="selectedExamName"></p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <div class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-3xl font-bold"
+               :class="myResult.passFail === 'pass' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'"
+               x-text="myResult.overallGrade"></div>
+          <div class="text-sm text-gray-500 mt-2">Grade</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <div class="text-3xl font-bold text-indigo-700" x-text="myResult.totalMarks + '/' + myResult.totalMaxMarks"></div>
+          <div class="text-sm text-gray-500 mt-2">Total Marks</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <div class="text-3xl font-bold text-indigo-700" x-text="myResult.overallPercentage + '%'"></div>
+          <div class="text-sm text-gray-500 mt-2">Percentage</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <div class="text-3xl font-bold text-amber-600" x-text="'#' + (myResult.rank || '-')"></div>
+          <div class="text-sm text-gray-500 mt-2">Rank</div>
+        </div>
+      </div>
+
+      <!-- Subject Table -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h3 class="font-semibold text-gray-700 mb-4">Subject-wise Breakdown</h3>
+        <table class="w-full text-sm">
+          <thead class="bg-indigo-700 text-white">
+            <tr>
+              <th class="px-4 py-3 text-left">Subject</th>
+              <th class="px-4 py-3 text-center">Obtained</th>
+              <th class="px-4 py-3 text-center">Max</th>
+              <th class="px-4 py-3 text-center">%</th>
+              <th class="px-4 py-3 text-center">Grade</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(s, idx) in (myResult.subjects || [])" :key="idx">
+              <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
+                <td class="px-4 py-3" x-text="s.subjectId?.name || 'Subject'"></td>
+                <td class="px-4 py-3 text-center font-medium" x-text="s.marksObtained"></td>
+                <td class="px-4 py-3 text-center" x-text="s.maxMarks"></td>
+                <td class="px-4 py-3 text-center" x-text="s.maxMarks > 0 ? ((s.marksObtained/s.maxMarks)*100).toFixed(1) + '%' : '-'"></td>
+                <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-700" x-text="s.grade"></span></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Download Buttons -->
+      <div class="flex gap-3">
+        <button @click="alert('Grade sheet download available after generation by teacher')" class="px-6 py-2.5 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Download Grade Sheet</button>
+      </div>
+    </div>
+
+    <!-- Admin/Teacher/Principal View -->
+    <div x-show="!isStudent && selectedExam">
+      <div class="flex gap-3 mb-4">
+        <div class="bg-white rounded-lg shadow-sm border p-3 text-center flex-1">
+          <div class="text-sm text-gray-500">Pass Rate</div>
+          <div class="text-xl font-bold text-green-600" x-text="(analytics.passRate || 0) + '%'"></div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border p-3 text-center flex-1">
+          <div class="text-sm text-gray-500">Avg Marks</div>
+          <div class="text-xl font-bold text-indigo-700" x-text="analytics.avgMarks || 0"></div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border p-3 text-center flex-1">
+          <div class="text-sm text-gray-500">Top Score</div>
+          <div class="text-xl font-bold text-amber-600" x-text="analytics.topScore || 0"></div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-semibold text-gray-700">All Results</h3>
+          <button @click="exportResults()" class="px-4 py-2 bg-indigo-700 text-white rounded-lg text-sm hover:bg-indigo-800">Export</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-indigo-700 text-white">
+              <tr>
+                <th class="px-4 py-3 text-left cursor-pointer" @click="sortBy('rank')">Rank</th>
+                <th class="px-4 py-3 text-left cursor-pointer" @click="sortBy('name')">Name</th>
+                <th class="px-4 py-3 text-left">Roll No</th>
+                <th class="px-4 py-3 text-center cursor-pointer" @click="sortBy('marks')">Marks</th>
+                <th class="px-4 py-3 text-center">%</th>
+                <th class="px-4 py-3 text-center">Grade</th>
+                <th class="px-4 py-3 text-center">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(r, idx) in results" :key="idx">
+                <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
+                  <td class="px-4 py-3 font-medium" x-text="r.rank || idx + 1"></td>
+                  <td class="px-4 py-3" x-text="r.studentId?.userId?.name || 'N/A'"></td>
+                  <td class="px-4 py-3" x-text="r.studentId?.rollNo || '-'"></td>
+                  <td class="px-4 py-3 text-center font-medium" x-text="r.totalMarks + '/' + r.totalMaxMarks"></td>
+                  <td class="px-4 py-3 text-center" x-text="r.overallPercentage + '%'"></td>
+                  <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-700" x-text="r.overallGrade"></span></td>
+                  <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-1 rounded-full text-xs font-medium"
+                          :class="r.passFail === 'pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                          x-text="r.passFail?.toUpperCase()"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      return fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers } }).then(r => r.json());
+    }
+
+    function examResultsPage() {
+      return {
+        sidebarOpen: false, exams: [], selectedExam: '', selectedExamName: '',
+        isStudent: false, userRole: '', myResult: null, results: [], analytics: {},
+        sortField: 'rank', sortDir: 1,
+
+        async init() {
+          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          try {
+            const payload = JSON.parse(atob(localStorage.getItem('auth_token').split('.')[1]));
+            this.userRole = payload.role;
+            this.isStudent = payload.role === 'student';
+          } catch(e) {}
+          const data = await api('/api/exams?limit=100');
+          this.exams = (data.exams || []).filter(e => this.isStudent ? e.status === 'published' : true);
+        },
+
+        async loadResults() {
+          if (!this.selectedExam) return;
+          const exam = this.exams.find(e => e._id === this.selectedExam);
+          this.selectedExamName = exam?.name || '';
+          const data = await api(`/api/results/exam-results-screen/${this.selectedExam}`);
+          if (this.isStudent) {
+            this.myResult = data.results?.[0] || null;
+          } else {
+            this.results = data.results || [];
+            this.analytics = data.analytics || {};
+          }
+        },
+
+        sortBy(field) {
+          if (this.sortField === field) this.sortDir *= -1;
+          else { this.sortField = field; this.sortDir = 1; }
+          this.results.sort((a, b) => {
+            let va, vb;
+            if (field === 'rank') { va = a.rank || 0; vb = b.rank || 0; }
+            else if (field === 'name') { va = a.studentId?.userId?.name || ''; vb = b.studentId?.userId?.name || ''; return va.localeCompare(vb) * this.sortDir; }
+            else if (field === 'marks') { va = a.totalMarks || 0; vb = b.totalMarks || 0; }
+            return (va - vb) * this.sortDir;
+          });
+        },
+
+        async exportResults() {
+          const token = localStorage.getItem('auth_token');
+          const res = await fetch(`/api/csv/export/results?examId=${this.selectedExam}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'results.csv'; a.click();
+          URL.revokeObjectURL(url);
+        },
+
+        logout() { localStorage.removeItem('auth_token'); window.location.href = '/login.html'; }
+      };
+    }
+  </script>
+</body>
+</html>

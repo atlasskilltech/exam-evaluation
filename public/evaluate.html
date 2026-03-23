@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evaluation Status - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="evaluateApp()" x-init="init()">
+
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Evaluation Status</h1>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <!-- Loading -->
+      <div x-show="pageLoading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+        </svg>
+      </div>
+
+      <div x-show="!pageLoading" x-cloak class="max-w-5xl mx-auto space-y-6">
+
+        <!-- Error state -->
+        <div x-show="loadError" class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p class="text-red-700" x-text="loadError"></p>
+          <a href="/upload.html" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium mt-2 inline-block">Back to Upload</a>
+        </div>
+
+        <!-- Batch Info Header Card -->
+        <div x-show="batch && !loadError" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-lg font-semibold text-gray-900">Batch: <span class="font-mono" x-text="batch.batchCode"></span></h2>
+                <!-- Status Badge -->
+                <span :class="{
+                  'bg-yellow-100 text-yellow-800': status === 'pending' || status === 'uploaded',
+                  'bg-blue-100 text-blue-800': status === 'processing' || status === 'evaluating',
+                  'bg-green-100 text-green-800': status === 'evaluated',
+                  'bg-red-100 text-red-800': status === 'failed'
+                }" class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize" x-text="status"></span>
+              </div>
+              <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500">
+                <span>Student: <span class="text-gray-900 font-medium" x-text="batch.student?.name || batch.studentName || '-'"></span></span>
+                <span>Subject: <span class="text-gray-900 font-medium" x-text="batch.subject?.name || batch.subjectName || '-'"></span></span>
+                <span>Uploaded: <span class="text-gray-900 font-medium" x-text="formatDate(batch.uploadedAt || batch.createdAt)"></span></span>
+              </div>
+            </div>
+
+            <!-- Action Buttons based on status -->
+            <div class="flex items-center gap-3 flex-shrink-0">
+              <!-- Pending: Start Evaluation -->
+              <button x-show="status === 'pending' || status === 'uploaded'" @click="startEvaluation()"
+                      :disabled="actionLoading"
+                      class="bg-indigo-700 hover:bg-indigo-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 inline-flex items-center gap-2">
+                <svg x-show="actionLoading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                <span x-text="actionLoading ? 'Starting...' : 'Start AI Evaluation'"></span>
+              </button>
+
+              <!-- Processing: Spinner -->
+              <div x-show="status === 'processing' || status === 'evaluating'" class="flex items-center gap-2 text-blue-700">
+                <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                <span class="text-sm font-medium">Processing...</span>
+              </div>
+
+              <!-- Evaluated: Go to Review -->
+              <a x-show="status === 'evaluated'"
+                 :href="'/review-detail.html?evalId=' + (batch.evaluationId || batch._id || batch.id)"
+                 class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition inline-flex items-center gap-2">
+                Go to Review
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+              </a>
+
+              <!-- Failed: Retry -->
+              <template x-if="status === 'failed'">
+                <div class="text-right">
+                  <p class="text-sm text-red-600 mb-2" x-text="batch.errorMessage || 'Evaluation failed. Please retry.'"></p>
+                  <button @click="startEvaluation()" :disabled="actionLoading"
+                          class="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Retry
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Image Gallery -->
+        <div x-show="batch && !loadError && images.length > 0" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 class="text-base font-semibold text-gray-900 mb-4">Scanned Pages (<span x-text="images.length"></span>)</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <template x-for="(img, index) in images" :key="index">
+              <div @click="openImageModal(index)"
+                   class="relative border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition group">
+                <img :src="img.url || img" class="w-full h-40 object-cover" :alt="'Page ' + (index + 1)">
+                <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 text-center">
+                  Page <span x-text="index + 1"></span>
+                </div>
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition flex items-center justify-center">
+                  <svg class="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/>
+                  </svg>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Image Enlarge Modal -->
+  <div x-show="showImageModal" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+       @keydown.escape.window="showImageModal = false"
+       @keydown.left.window="prevImage()" @keydown.right.window="nextImage()">
+    <div class="absolute inset-0 bg-black/80" @click="showImageModal = false"></div>
+    <div class="relative z-10 max-w-4xl max-h-[90vh] w-full" @click.stop>
+      <!-- Close button -->
+      <button @click="showImageModal = false" class="absolute -top-10 right-0 text-white hover:text-gray-300">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+      <!-- Image -->
+      <img :src="(images[modalImageIndex]?.url || images[modalImageIndex])" class="max-h-[85vh] mx-auto rounded-lg object-contain" :alt="'Page ' + (modalImageIndex + 1)">
+      <!-- Nav buttons -->
+      <button x-show="modalImageIndex > 0" @click="prevImage()"
+              class="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <button x-show="modalImageIndex < images.length - 1" @click="nextImage()"
+              class="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <!-- Page indicator -->
+      <div class="text-center mt-3 text-white text-sm">
+        Page <span x-text="modalImageIndex + 1"></span> of <span x-text="images.length"></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      return fetch(url, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers }
+      }).then(r => r.json());
+    }
+
+    function evaluateApp() {
+      return {
+        sidebarOpen: false,
+        currentPage: 'upload',
+        userName: '',
+        userRole: '',
+        pageLoading: true,
+
+        batchId: '',
+        batch: null,
+        status: '',
+        images: [],
+        loadError: '',
+        actionLoading: false,
+        pollInterval: null,
+
+        showImageModal: false,
+        modalImageIndex: 0,
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        async init() {
+          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+
+          const params = new URLSearchParams(window.location.search);
+          this.batchId = params.get('batchId');
+          if (!this.batchId) {
+            this.loadError = 'No batch ID provided.';
+            this.pageLoading = false;
+            return;
+          }
+
+          await this.loadBatch();
+          this.startPolling();
+        },
+
+        async loadBatch() {
+          try {
+            const data = await api('/api/ai/status/' + this.batchId);
+            this.batch = data.batch || data.data || data;
+            this.status = this.batch.status || '';
+            this.images = this.batch.images || this.batch.pages || this.batch.scannedImages || [];
+          } catch (e) {
+            this.loadError = 'Failed to load batch information.';
+            console.error(e);
+          } finally {
+            this.pageLoading = false;
+          }
+        },
+
+        startPolling() {
+          this.pollInterval = setInterval(async () => {
+            if (this.status === 'evaluated' || this.status === 'approved' || this.status === 'failed') {
+              clearInterval(this.pollInterval);
+              return;
+            }
+            try {
+              const data = await api('/api/ai/status/' + this.batchId);
+              const updated = data.batch || data.data || data;
+              this.status = updated.status || this.status;
+              if (updated.evaluationId) this.batch.evaluationId = updated.evaluationId;
+              if (updated.errorMessage) this.batch.errorMessage = updated.errorMessage;
+            } catch (e) {
+              console.error('Poll failed:', e);
+            }
+          }, 3000);
+        },
+
+        async startEvaluation() {
+          this.actionLoading = true;
+          try {
+            const data = await api('/api/ai/evaluate/' + this.batchId, { method: 'POST' });
+            this.status = 'processing';
+            if (!this.pollInterval) this.startPolling();
+          } catch (e) {
+            console.error('Failed to start evaluation:', e);
+          } finally {
+            this.actionLoading = false;
+          }
+        },
+
+        openImageModal(index) {
+          this.modalImageIndex = index;
+          this.showImageModal = true;
+        },
+
+        prevImage() {
+          if (this.modalImageIndex > 0) this.modalImageIndex--;
+        },
+
+        nextImage() {
+          if (this.modalImageIndex < this.images.length - 1) this.modalImageIndex++;
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          return new Date(dateStr).toLocaleString();
+        },
+
+        logout() {
+          clearInterval(this.pollInterval);
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>

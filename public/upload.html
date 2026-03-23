@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Answer Sheets - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="uploadApp()" x-init="init()">
+
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Upload Answer Sheets</h1>
+        <p class="text-sm text-gray-500">Scan and upload student answer sheets for AI evaluation</p>
+      </div>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <div class="max-w-4xl mx-auto">
+
+        <!-- Step Indicator -->
+        <div class="flex items-center justify-center mb-8">
+          <template x-for="(s, i) in ['Select Details', 'Upload Images', 'Review & Submit']" :key="i">
+            <div class="flex items-center">
+              <div class="flex items-center gap-2">
+                <div :class="step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'bg-indigo-700 text-white' : 'bg-gray-200 text-gray-500'"
+                     class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors">
+                  <template x-if="step > i + 1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  </template>
+                  <template x-if="step <= i + 1">
+                    <span x-text="i + 1"></span>
+                  </template>
+                </div>
+                <span :class="step === i + 1 ? 'text-indigo-700 font-medium' : 'text-gray-500'" class="text-sm hidden sm:inline" x-text="s"></span>
+              </div>
+              <div x-show="i < 2" :class="step > i + 1 ? 'bg-green-500' : 'bg-gray-200'" class="w-12 sm:w-20 h-0.5 mx-2 transition-colors"></div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Step 1: Select Details -->
+        <div x-show="step === 1" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-6">Select Exam Details</h2>
+
+          <!-- Exam Select -->
+          <div class="mb-5">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Exam</label>
+            <select x-model="selectedExamId" @change="onExamChange()"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white">
+              <option value="">Select an exam...</option>
+              <template x-for="exam in exams" :key="exam._id || exam.id">
+                <option :value="exam._id || exam.id" x-text="exam.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <!-- Subject Select -->
+          <div class="mb-5">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Subject</label>
+            <select x-model="selectedSubjectId" :disabled="!selectedExamId || subjects.length === 0"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed">
+              <option value="">Select a subject...</option>
+              <template x-for="sub in subjects" :key="sub._id || sub.id">
+                <option :value="sub._id || sub.id" x-text="sub.name"></option>
+              </template>
+            </select>
+            <p x-show="selectedExamId && subjectsLoading" class="text-xs text-gray-400 mt-1">Loading subjects...</p>
+          </div>
+
+          <!-- Student Search -->
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Student</label>
+            <div class="relative">
+              <input type="text" x-model="studentSearch" @input.debounce.400ms="searchStudents()"
+                     placeholder="Search by name or roll number..."
+                     class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+              <div x-show="studentResults.length > 0 && !selectedStudent" x-cloak
+                   class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <template x-for="student in studentResults" :key="student._id || student.id">
+                  <button @click="selectStudent(student)"
+                          class="w-full text-left px-4 py-2.5 hover:bg-indigo-50 text-sm border-b border-gray-100 last:border-0 transition">
+                    <span class="font-medium text-gray-900" x-text="student.name"></span>
+                    <span class="text-gray-500 ml-2" x-text="'Roll: ' + (student.rollNo || student.rollNumber || '')"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+            <!-- Selected Student Chip -->
+            <div x-show="selectedStudent" x-cloak class="mt-2 inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full text-sm">
+              <span x-text="selectedStudent?.name"></span>
+              <span class="text-indigo-400" x-text="'(' + (selectedStudent?.rollNo || selectedStudent?.rollNumber || '') + ')'"></span>
+              <button @click="selectedStudent = null; studentSearch = ''" class="hover:text-indigo-900">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button @click="goToStep2()" :disabled="!selectedExamId || !selectedSubjectId || !selectedStudent"
+                    class="bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-800 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              Next: Upload Images
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2: Upload Images -->
+        <div x-show="step === 2" x-cloak class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-6">Upload Scanned Images</h2>
+
+          <!-- Drag & Drop Zone -->
+          <div @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="handleDrop($event)"
+               :class="dragOver ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 bg-gray-50'"
+               class="border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer mb-6"
+               @click="$refs.fileInput.click()">
+            <input type="file" x-ref="fileInput" @change="handleFileSelect($event)" multiple accept="image/*" class="hidden">
+            <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <p class="text-gray-600 font-medium">Drag & drop scanned images here</p>
+            <p class="text-gray-400 text-sm mt-1">or click to browse files</p>
+            <p class="text-gray-400 text-xs mt-2">Supports JPG, PNG, JPEG. Max 10 files.</p>
+          </div>
+
+          <!-- Image Previews Grid -->
+          <div x-show="files.length > 0" class="mb-6">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Uploaded Pages (<span x-text="files.length"></span>)</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              <template x-for="(file, index) in files" :key="index">
+                <div class="relative group border border-gray-200 rounded-lg overflow-hidden">
+                  <img :src="file.preview" class="w-full h-32 object-cover" :alt="'Page ' + (index + 1)">
+                  <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 text-center">
+                    Page <span x-text="index + 1"></span>
+                  </div>
+                  <button @click="removeFile(index)"
+                          class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div class="flex justify-between">
+            <button @click="step = 1" class="border border-gray-300 text-gray-700 px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+              Back
+            </button>
+            <button @click="goToStep3()" :disabled="files.length === 0"
+                    class="bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-800 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              Next: Review
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 3: Summary & Submit -->
+        <div x-show="step === 3" x-cloak class="space-y-6">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-6">Review & Submit</h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs text-gray-500 uppercase font-medium">Exam</p>
+                <p class="text-sm font-semibold text-gray-900 mt-1" x-text="getSelectedExamName()"></p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs text-gray-500 uppercase font-medium">Subject</p>
+                <p class="text-sm font-semibold text-gray-900 mt-1" x-text="getSelectedSubjectName()"></p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs text-gray-500 uppercase font-medium">Student</p>
+                <p class="text-sm font-semibold text-gray-900 mt-1" x-text="selectedStudent?.name + ' (' + (selectedStudent?.rollNo || selectedStudent?.rollNumber || '') + ')'"></p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs text-gray-500 uppercase font-medium">Pages</p>
+                <p class="text-sm font-semibold text-gray-900 mt-1" x-text="files.length + ' page(s)'"></p>
+              </div>
+            </div>
+
+            <!-- Thumbnail Strip -->
+            <div class="flex gap-2 overflow-x-auto pb-2 mb-6">
+              <template x-for="(file, index) in files" :key="index">
+                <img :src="file.preview" class="w-16 h-20 object-cover rounded border border-gray-200 flex-shrink-0" :alt="'Page ' + (index + 1)">
+              </template>
+            </div>
+
+            <!-- Error Message -->
+            <div x-show="uploadError" x-cloak class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm" x-text="uploadError"></div>
+
+            <div x-show="!uploadSuccess" class="flex justify-between">
+              <button @click="step = 2" class="border border-gray-300 text-gray-700 px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+                Back
+              </button>
+              <button @click="submitUpload()" :disabled="uploading"
+                      class="bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-800 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <svg x-show="uploading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                <span x-text="uploading ? 'Uploading...' : 'Upload & Start AI Evaluation'"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Success Card -->
+          <div x-show="uploadSuccess" x-cloak class="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+            <svg class="w-12 h-12 mx-auto mb-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <h3 class="text-lg font-semibold text-green-800 mb-1">Upload Successful!</h3>
+            <p class="text-sm text-green-700 mb-4">Batch Code: <span class="font-mono font-bold" x-text="batchCode"></span></p>
+            <a :href="'/evaluate.html?batchId=' + batchId"
+               class="inline-flex items-center gap-2 bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-800 transition">
+              Go to Evaluation
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function api(url, opts = {}) {
+      const token = localStorage.getItem('auth_token');
+      return fetch(url, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers }
+      }).then(r => r.json());
+    }
+
+    function uploadApp() {
+      return {
+        sidebarOpen: false,
+        currentPage: 'upload',
+        userName: '',
+        userRole: '',
+        step: 1,
+
+        exams: [],
+        subjects: [],
+        subjectsLoading: false,
+        selectedExamId: '',
+        selectedSubjectId: '',
+        studentSearch: '',
+        studentResults: [],
+        selectedStudent: null,
+        files: [],
+        dragOver: false,
+        uploading: false,
+        uploadError: '',
+        uploadSuccess: false,
+        batchCode: '',
+        batchId: '',
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        init() {
+          if (!localStorage.getItem('auth_token')) {
+            window.location.href = '/login.html';
+            return;
+          }
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+          this.loadExams();
+        },
+
+        async loadExams() {
+          try {
+            const data = await api('/api/exams?status=active');
+            this.exams = data.exams || data.data || data || [];
+          } catch (e) {
+            console.error('Failed to load exams', e);
+          }
+        },
+
+        async onExamChange() {
+          this.selectedSubjectId = '';
+          this.subjects = [];
+          if (!this.selectedExamId) return;
+          this.subjectsLoading = true;
+          try {
+            const data = await api(`/api/exams/${this.selectedExamId}/subjects`);
+            this.subjects = data.subjects || data.data || data || [];
+          } catch (e) {
+            console.error('Failed to load subjects', e);
+          } finally {
+            this.subjectsLoading = false;
+          }
+        },
+
+        async searchStudents() {
+          if (this.studentSearch.length < 2) {
+            this.studentResults = [];
+            return;
+          }
+          try {
+            const data = await api(`/api/students?search=${encodeURIComponent(this.studentSearch)}`);
+            this.studentResults = data.students || data.data || data || [];
+          } catch (e) {
+            console.error('Failed to search students', e);
+          }
+        },
+
+        selectStudent(student) {
+          this.selectedStudent = student;
+          this.studentSearch = student.name;
+          this.studentResults = [];
+        },
+
+        goToStep2() {
+          if (this.selectedExamId && this.selectedSubjectId && this.selectedStudent) this.step = 2;
+        },
+
+        goToStep3() {
+          if (this.files.length > 0) this.step = 3;
+        },
+
+        handleDrop(event) {
+          this.dragOver = false;
+          this.addFiles(Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')));
+        },
+
+        handleFileSelect(event) {
+          this.addFiles(Array.from(event.target.files));
+          event.target.value = '';
+        },
+
+        addFiles(newFiles) {
+          newFiles.forEach(file => {
+            if (this.files.length >= 10) return;
+            this.files.push({ file, preview: URL.createObjectURL(file) });
+          });
+        },
+
+        removeFile(index) {
+          URL.revokeObjectURL(this.files[index].preview);
+          this.files.splice(index, 1);
+        },
+
+        getSelectedExamName() {
+          const exam = this.exams.find(e => (e._id || e.id) === this.selectedExamId);
+          return exam ? exam.name : '';
+        },
+
+        getSelectedSubjectName() {
+          const sub = this.subjects.find(s => (s._id || s.id) === this.selectedSubjectId);
+          return sub ? sub.name : '';
+        },
+
+        async submitUpload() {
+          this.uploading = true;
+          this.uploadError = '';
+          try {
+            const formData = new FormData();
+            formData.append('examId', this.selectedExamId);
+            formData.append('subjectId', this.selectedSubjectId);
+            formData.append('studentId', this.selectedStudent._id || this.selectedStudent.id);
+            this.files.forEach(f => formData.append('images', f.file));
+
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/upload/scan-batch', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: formData
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Upload failed');
+
+            this.batchCode = data.batchCode || data.batch?.batchCode || data.data?.batchCode || '';
+            this.batchId = data.batchId || data.batch?._id || data.batch?.id || data._id || data.data?._id || '';
+            this.uploadSuccess = true;
+          } catch (e) {
+            this.uploadError = e.message || 'Upload failed. Please try again.';
+          } finally {
+            this.uploading = false;
+          }
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>
