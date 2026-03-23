@@ -104,13 +104,6 @@ async function callOpenAIVision(imageContents, promptText) {
   rawText = rawText.replace(/```json|```/g, '').trim();
   const parsed = JSON.parse(rawText);
 
-  if (!parsed.student_answers || !Array.isArray(parsed.student_answers)) {
-    throw new Error('AI returned invalid format: missing student_answers array');
-  }
-  if (typeof parsed.total_marks_obtained !== 'number') {
-    throw new Error('AI returned invalid format: missing total_marks_obtained');
-  }
-
   return parsed;
 }
 
@@ -184,6 +177,9 @@ async function evaluateBatch(batchId) {
     const imageContents = await prepareImages(imagePaths);
     const prompt = buildEvaluationPrompt(answerKey, batch.examId.type, batch.subjectId.name);
     const aiResult = await callOpenAIVision(imageContents, prompt);
+    if (!aiResult.student_answers || !Array.isArray(aiResult.student_answers)) {
+      throw new Error('AI returned invalid format: missing student_answers array');
+    }
     const evaluationId = await storeEvaluation(batchId, aiResult, batch.examId, batch, batch.examId.gradingScale);
 
     return {
