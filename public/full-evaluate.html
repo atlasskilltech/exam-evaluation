@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Full Evaluate - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="fullEvalApp()" x-init="init()">
+
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+
+    <!-- User info at bottom -->
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Full Evaluate</h1>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <!-- Upload Form -->
+      <div x-show="step === 'upload'" class="max-w-2xl">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-1">Quick Evaluation</h2>
+          <p class="text-sm text-gray-500 mb-6">Upload a question paper and answer sheet together — AI will extract questions, evaluate answers, and give marks.</p>
+
+          <form @submit.prevent="startEvaluation()">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Student Name *</label>
+                <input x-model="form.studentName" type="text" required
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. John Doe">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Exam Type</label>
+                <select x-model="form.examType"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                  <option value="descriptive">Descriptive</option>
+                  <option value="mcq">MCQ</option>
+                  <option value="mixed">Mixed</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Course Name</label>
+                <input x-model="form.courseName" type="text"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. Mathematics">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Course Code</label>
+                <input x-model="form.courseCode" type="text"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. MATH101">
+              </div>
+            </div>
+
+            <!-- Question Paper Upload -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Question Paper Images *</label>
+              <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-400 transition cursor-pointer"
+                   @click="$refs.qpInput.click()"
+                   @dragover.prevent="dragOverQP = true" @dragleave="dragOverQP = false"
+                   @drop.prevent="dragOverQP = false; handleQPDrop($event)"
+                   :class="dragOverQP ? 'border-indigo-500 bg-indigo-50' : ''">
+                <svg class="mx-auto w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+                <p class="text-sm text-gray-600">Click or drag to upload question paper pages</p>
+                <p class="text-xs text-gray-400 mt-1">JPG, JPEG, PNG — up to 10 images, 10MB each</p>
+              </div>
+              <input type="file" x-ref="qpInput" @change="handleQPFiles($event)" accept=".jpg,.jpeg,.png" multiple class="hidden">
+              <div x-show="qpFiles.length > 0" class="mt-2 space-y-1">
+                <template x-for="(file, i) in qpFiles" :key="i">
+                  <div class="flex items-center justify-between bg-gray-50 rounded px-3 py-1.5 text-sm">
+                    <span class="text-gray-700 truncate" x-text="file.name"></span>
+                    <button type="button" @click="qpFiles.splice(i, 1)" class="text-red-500 hover:text-red-700 ml-2 text-xs">Remove</button>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Answer Sheet Upload -->
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Answer Sheet Images *</label>
+              <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-400 transition cursor-pointer"
+                   @click="$refs.asInput.click()"
+                   @dragover.prevent="dragOverAS = true" @dragleave="dragOverAS = false"
+                   @drop.prevent="dragOverAS = false; handleASDrop($event)"
+                   :class="dragOverAS ? 'border-indigo-500 bg-indigo-50' : ''">
+                <svg class="mx-auto w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+                <p class="text-sm text-gray-600">Click or drag to upload answer sheet pages</p>
+                <p class="text-xs text-gray-400 mt-1">JPG, JPEG, PNG — up to 20 images, 10MB each</p>
+              </div>
+              <input type="file" x-ref="asInput" @change="handleASFiles($event)" accept=".jpg,.jpeg,.png" multiple class="hidden">
+              <div x-show="asFiles.length > 0" class="mt-2 space-y-1">
+                <template x-for="(file, i) in asFiles" :key="i">
+                  <div class="flex items-center justify-between bg-gray-50 rounded px-3 py-1.5 text-sm">
+                    <span class="text-gray-700 truncate" x-text="file.name"></span>
+                    <button type="button" @click="asFiles.splice(i, 1)" class="text-red-500 hover:text-red-700 ml-2 text-xs">Remove</button>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <button type="submit" :disabled="submitting"
+                    class="w-full bg-indigo-700 hover:bg-indigo-800 disabled:bg-indigo-400 text-white font-medium py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2">
+              <svg x-show="submitting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+              <span x-text="submitting ? 'Uploading...' : 'Start Evaluation'"></span>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Processing State -->
+      <div x-show="step === 'processing'" x-cloak class="max-w-lg mx-auto text-center py-16">
+        <svg class="animate-spin w-12 h-12 text-indigo-700 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+        </svg>
+        <h2 class="text-lg font-semibold text-gray-900 mb-1">AI is evaluating...</h2>
+        <p class="text-sm text-gray-500 mb-2" x-text="statusMessage"></p>
+        <p class="text-xs text-gray-400">This may take 1-2 minutes depending on the number of pages.</p>
+      </div>
+
+      <!-- Results -->
+      <div x-show="step === 'result'" x-cloak>
+        <div class="max-w-4xl">
+          <!-- Summary Card -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 class="text-lg font-semibold text-gray-900" x-text="result.studentName"></h2>
+                <p class="text-sm text-gray-500" x-text="(result.courseName || '') + (result.courseCode ? ' (' + result.courseCode + ')' : '')"></p>
+              </div>
+              <span :class="{
+                'bg-green-100 text-green-800': result.passFail === 'pass',
+                'bg-red-100 text-red-800': result.passFail === 'fail'
+              }" class="inline-flex px-3 py-1 rounded-full text-sm font-semibold uppercase" x-text="result.passFail"></span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">Marks</p>
+                <p class="text-xl font-bold text-gray-900" x-text="result.totalMarksObtained + '/' + result.totalMaxMarksCalc"></p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">Percentage</p>
+                <p class="text-xl font-bold text-gray-900" x-text="(result.percentage || 0).toFixed(1) + '%'"></p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">Grade</p>
+                <p class="text-xl font-bold text-gray-900" x-text="result.grade || '-'"></p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">Exam Type</p>
+                <p class="text-xl font-bold text-gray-900 capitalize" x-text="result.examType || '-'"></p>
+              </div>
+            </div>
+
+            <div x-show="result.remarks" class="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p class="text-sm text-blue-800"><strong>Remarks:</strong> <span x-text="result.remarks"></span></p>
+            </div>
+          </div>
+
+          <!-- Question Breakdown Table -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div class="px-5 py-4 border-b border-gray-100">
+              <h3 class="text-base font-semibold text-gray-900">Question Breakdown</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-500 border-b border-gray-100">
+                    <th class="px-5 py-3 font-medium">Q#</th>
+                    <th class="px-5 py-3 font-medium">Student Answer</th>
+                    <th class="px-5 py-3 font-medium">Correct Answer</th>
+                    <th class="px-5 py-3 font-medium">Marks</th>
+                    <th class="px-5 py-3 font-medium">Status</th>
+                    <th class="px-5 py-3 font-medium">Notes</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                  <template x-for="q in result.questionBreakdown || []" :key="q.qNo">
+                    <tr class="hover:bg-gray-50 transition">
+                      <td class="px-5 py-3 font-medium" x-text="'Q' + q.qNo"></td>
+                      <td class="px-5 py-3 max-w-[200px] truncate" x-text="q.studentAnswer || '-'" :title="q.studentAnswer"></td>
+                      <td class="px-5 py-3 max-w-[200px] truncate" x-text="q.correctAnswer || '-'" :title="q.correctAnswer"></td>
+                      <td class="px-5 py-3 font-mono" x-text="q.marksAwarded + '/' + q.maxMarks"></td>
+                      <td class="px-5 py-3">
+                        <span :class="q.isCorrect ? 'bg-green-100 text-green-800' : (q.marksAwarded > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800')"
+                              class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium"
+                              x-text="q.isCorrect ? 'Correct' : (q.marksAwarded > 0 ? 'Partial' : 'Wrong')"></span>
+                      </td>
+                      <td class="px-5 py-3 text-gray-500 text-xs max-w-[200px] truncate" x-text="q.notes || '-'" :title="q.notes"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mt-4 flex gap-3">
+            <button @click="resetForm()" class="bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+              Evaluate Another
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div x-show="step === 'error'" x-cloak class="max-w-lg mx-auto text-center py-16">
+        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </div>
+        <h2 class="text-lg font-semibold text-gray-900 mb-1">Evaluation Failed</h2>
+        <p class="text-sm text-red-600 mb-4" x-text="errorMessage"></p>
+        <button @click="resetForm()" class="bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+          Try Again
+        </button>
+      </div>
+
+      <!-- Past Evaluations -->
+      <div x-show="step === 'upload'" class="max-w-2xl mt-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-base font-semibold text-gray-900">Past Evaluations</h3>
+            <button @click="loadPastEvals()" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Refresh</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-500 border-b border-gray-100">
+                  <th class="px-5 py-3 font-medium">Student</th>
+                  <th class="px-5 py-3 font-medium">Course</th>
+                  <th class="px-5 py-3 font-medium">Marks</th>
+                  <th class="px-5 py-3 font-medium">Grade</th>
+                  <th class="px-5 py-3 font-medium">Status</th>
+                  <th class="px-5 py-3 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-50">
+                <template x-for="ev in pastEvals" :key="ev._id">
+                  <tr class="hover:bg-gray-50 transition">
+                    <td class="px-5 py-3" x-text="ev.studentName"></td>
+                    <td class="px-5 py-3" x-text="ev.courseName || '-'"></td>
+                    <td class="px-5 py-3 font-mono" x-text="ev.status === 'completed' ? (ev.totalMarksObtained + '/' + ev.totalMaxMarksCalc) : '-'"></td>
+                    <td class="px-5 py-3" x-text="ev.grade || '-'"></td>
+                    <td class="px-5 py-3">
+                      <span :class="{
+                        'bg-green-100 text-green-800': ev.status === 'completed',
+                        'bg-yellow-100 text-yellow-800': ev.status === 'extracting_questions' || ev.status === 'evaluating_answers',
+                        'bg-red-100 text-red-800': ev.status === 'failed'
+                      }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize" x-text="ev.status"></span>
+                    </td>
+                    <td class="px-5 py-3">
+                      <button x-show="ev.status === 'completed'" @click="viewResult(ev._id)"
+                              class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">View</button>
+                    </td>
+                  </tr>
+                </template>
+                <tr x-show="pastEvals.length === 0">
+                  <td colspan="6" class="px-5 py-8 text-center text-gray-400">No past evaluations found.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function fullEvalApp() {
+      return {
+        sidebarOpen: false,
+        currentPage: 'full-evaluate',
+        userName: '',
+        userRole: '',
+        step: 'upload', // upload | processing | result | error
+        submitting: false,
+        statusMessage: 'Starting evaluation...',
+        errorMessage: '',
+        evaluationId: null,
+        pollTimer: null,
+        dragOverQP: false,
+        dragOverAS: false,
+
+        form: {
+          studentName: '',
+          courseName: '',
+          courseCode: '',
+          examType: 'descriptive'
+        },
+        qpFiles: [],
+        asFiles: [],
+        result: {},
+        pastEvals: [],
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'full-evaluate', label: 'Full Evaluate', href: '/full-evaluate.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        authHeaders() {
+          return {
+            'Authorization': 'Bearer ' + localStorage.getItem('auth_token')
+          };
+        },
+
+        async init() {
+          const token = localStorage.getItem('auth_token');
+          if (!token) { window.location.href = '/login.html'; return; }
+
+          try {
+            const res = await fetch('/api/auth/me', { headers: { ...this.authHeaders(), 'Content-Type': 'application/json' } });
+            if (!res.ok) { this.logout(); return; }
+            const data = await res.json();
+            const user = data.user || data;
+            this.userName = user.name || user.email || '';
+            this.userRole = user.role || '';
+            localStorage.setItem('user_role', this.userRole);
+            localStorage.setItem('user_name', this.userName);
+          } catch (err) {
+            console.error('Failed to load user:', err);
+          }
+
+          await this.loadPastEvals();
+        },
+
+        handleQPFiles(event) {
+          const files = Array.from(event.target.files);
+          this.qpFiles = [...this.qpFiles, ...files].slice(0, 10);
+        },
+
+        handleASFiles(event) {
+          const files = Array.from(event.target.files);
+          this.asFiles = [...this.asFiles, ...files].slice(0, 20);
+        },
+
+        handleQPDrop(event) {
+          const files = Array.from(event.dataTransfer.files).filter(f => /\.(jpe?g|png)$/i.test(f.name));
+          this.qpFiles = [...this.qpFiles, ...files].slice(0, 10);
+        },
+
+        handleASDrop(event) {
+          const files = Array.from(event.dataTransfer.files).filter(f => /\.(jpe?g|png)$/i.test(f.name));
+          this.asFiles = [...this.asFiles, ...files].slice(0, 20);
+        },
+
+        async startEvaluation() {
+          if (!this.form.studentName.trim()) return alert('Student name is required');
+          if (this.qpFiles.length === 0) return alert('Upload at least 1 question paper image');
+          if (this.asFiles.length === 0) return alert('Upload at least 1 answer sheet image');
+
+          this.submitting = true;
+
+          const formData = new FormData();
+          formData.append('studentName', this.form.studentName);
+          formData.append('courseName', this.form.courseName);
+          formData.append('courseCode', this.form.courseCode);
+          formData.append('examType', this.form.examType);
+
+          for (const f of this.qpFiles) formData.append('questionPaper', f);
+          for (const f of this.asFiles) formData.append('answerSheet', f);
+
+          try {
+            const res = await fetch('/api/ai/full-evaluate', {
+              method: 'POST',
+              headers: this.authHeaders(),
+              body: formData
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+              throw new Error(data.message || 'Failed to start evaluation');
+            }
+
+            this.evaluationId = data.evaluationId;
+            this.step = 'processing';
+            this.statusMessage = 'Extracting questions from question paper...';
+            this.startPolling();
+          } catch (err) {
+            this.errorMessage = err.message;
+            this.step = 'error';
+          } finally {
+            this.submitting = false;
+          }
+        },
+
+        startPolling() {
+          this.pollTimer = setInterval(async () => {
+            try {
+              const res = await fetch(`/api/ai/full-evaluate-status/${this.evaluationId}`, {
+                headers: this.authHeaders()
+              });
+              const data = await res.json();
+
+              if (data.status === 'extracting_questions') {
+                this.statusMessage = 'Extracting questions from question paper...';
+              } else if (data.status === 'evaluating_answers') {
+                this.statusMessage = 'Evaluating student answers...';
+              } else if (data.status === 'completed') {
+                clearInterval(this.pollTimer);
+                await this.viewResult(this.evaluationId);
+              } else if (data.status === 'failed') {
+                clearInterval(this.pollTimer);
+                this.errorMessage = data.errorMessage || 'Evaluation failed';
+                this.step = 'error';
+              }
+            } catch (err) {
+              console.error('Polling error:', err);
+            }
+          }, 3000);
+        },
+
+        async viewResult(id) {
+          try {
+            const res = await fetch(`/api/ai/full-evaluate-result/${id}`, {
+              headers: this.authHeaders()
+            });
+            const data = await res.json();
+            if (data.success) {
+              this.result = data.evaluation;
+              this.step = 'result';
+            }
+          } catch (err) {
+            console.error('Failed to load result:', err);
+          }
+        },
+
+        async loadPastEvals() {
+          try {
+            const res = await fetch('/api/ai/full-evaluations', {
+              headers: this.authHeaders()
+            });
+            const data = await res.json();
+            if (data.success) {
+              this.pastEvals = data.evaluations || [];
+            }
+          } catch (err) {
+            console.error('Failed to load past evaluations:', err);
+          }
+        },
+
+        resetForm() {
+          this.step = 'upload';
+          this.form = { studentName: '', courseName: '', courseCode: '', examType: 'descriptive' };
+          this.qpFiles = [];
+          this.asFiles = [];
+          this.result = {};
+          this.evaluationId = null;
+          this.errorMessage = '';
+          if (this.pollTimer) clearInterval(this.pollTimer);
+          this.loadPastEvals();
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
+      };
+    }
+  </script>
+</body>
+</html>
