@@ -3,7 +3,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { evaluateBatch, extractAnswerKeyFromPaper } = require('../services/aiService');
+const { evaluateBatch, extractAnswerKeyFromPaper, fullEvaluate } = require('../services/aiService');
+const QuickEvaluation = require('../models/QuickEvaluation');
+const { calculateGrade } = require('../utils/helpers');
 const ScanBatch = require('../models/ScanBatch');
 const Evaluation = require('../models/Evaluation');
 const Subject = require('../models/Subject');
@@ -202,6 +204,184 @@ router.get('/extract-status/:subjectId', verifyToken, async (req, res, next) => 
     }
 
     return res.json({ success: true, status: 'processing' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Full Evaluate: Question Paper + Answer Sheet combined ────────
+
+// Multer for full evaluation (question paper + answer sheet)
+const feStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = file.fieldname === 'questionPaper'
+      ? 'uploads/full-eval/question-papers/'
+      : 'uploads/full-eval/answer-sheets/';
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const feUpload = multer({
+  storage: feStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, allowed.includes(ext));
+  }
+});
+
+// POST /api/ai/full-evaluate — Upload question paper + answer sheets and evaluate
+router.post('/full-evaluate',
+  verifyToken,
+  requireRole('superadmin', 'teacher'),
+  feUpload.fields([
+    { name: 'questionPaper', maxCount: 10 },
+    { name: 'answerSheet', maxCount: 20 }
+  ]),
+  async (req, res, next) => {
+    const qpFiles = (req.files && req.files.questionPaper) || [];
+    const asFiles = (req.files && req.files.answerSheet) || [];
+
+    try {
+      const { studentName, courseName, courseCode, examType } = req.body;
+
+      if (!studentName) {
+        return res.status(400).json({ success: false, message: 'Student name is required' });
+      }
+      if (qpFiles.length === 0) {
+        return res.status(400).json({ success: false, message: 'At least 1 question paper image is required' });
+      }
+      if (asFiles.length === 0) {
+        return res.status(400).json({ success: false, message: 'At least 1 answer sheet image is required' });
+      }
+
+      // Create the quick evaluation record
+      const quickEval = await QuickEvaluation.create({
+        studentName,
+        courseName: courseName || '',
+        courseCode: courseCode || '',
+        examType: examType || 'descriptive',
+        questionPaperImages: qpFiles.map(f => f.path),
+        answerSheetImages: asFiles.map(f => f.path),
+        status: 'extracting_questions',
+        createdBy: req.user.id
+      });
+
+      // Return 202 immediately, process async
+      res.status(202).json({
+        success: true,
+        message: 'Full evaluation started',
+        evaluationId: quickEval._id
+      });
+
+      // Async processing
+      setImmediate(async () => {
+        try {
+          const qpPaths = qpFiles.sort((a, b) => a.originalname.localeCompare(b.originalname))
+            .map(f => path.join(process.cwd(), f.path));
+          const asPaths = asFiles.sort((a, b) => a.originalname.localeCompare(b.originalname))
+            .map(f => path.join(process.cwd(), f.path));
+
+          quickEval.status = 'extracting_questions';
+          await quickEval.save();
+
+          const result = await fullEvaluate(qpPaths, asPaths, examType || 'descriptive');
+
+          // Store extracted questions
+          quickEval.extractedQuestions = result.extractedQuestions.map(q => ({
+            qNo: q.q_no,
+            questionText: q.question_text,
+            correctAnswer: q.correct_answer,
+            maxMarks: q.max_marks,
+            acceptedVariants: q.accepted_variants || [],
+            confidence: q.confidence
+          }));
+
+          // Store evaluation breakdown
+          const evaluation = result.evaluation;
+          quickEval.questionBreakdown = evaluation.student_answers.map(sa => ({
+            qNo: sa.q_no,
+            questionText: sa.question_text || '',
+            studentAnswer: sa.student_answer,
+            correctAnswer: sa.correct_answer,
+            marksAwarded: sa.marks_awarded,
+            maxMarks: sa.max_marks,
+            isCorrect: sa.is_correct,
+            aiConfidence: sa.ai_confidence,
+            notes: sa.notes || ''
+          }));
+
+          quickEval.totalMarksObtained = evaluation.total_marks_obtained;
+          quickEval.totalMaxMarksCalc = evaluation.total_max_marks;
+          quickEval.percentage = evaluation.percentage;
+          quickEval.grade = calculateGrade(evaluation.percentage);
+          quickEval.passFail = evaluation.percentage >= 33 ? 'pass' : 'fail';
+          quickEval.remarks = evaluation.remarks;
+          quickEval.status = 'completed';
+          await quickEval.save();
+
+          console.log(`[AI] Full evaluation complete: ${quickEval._id} — ${evaluation.total_marks_obtained}/${evaluation.total_max_marks}`);
+        } catch (err) {
+          console.error(`[AI] Full evaluation failed: ${quickEval._id}:`, err.message);
+          quickEval.status = 'failed';
+          quickEval.errorMessage = err.message;
+          await quickEval.save();
+        }
+      });
+    } catch (err) {
+      // Clean up uploaded files on error
+      [...qpFiles, ...asFiles].forEach(f => {
+        try { fs.unlinkSync(f.path); } catch (e) { /* ignore */ }
+      });
+      next(err);
+    }
+  }
+);
+
+// GET /api/ai/full-evaluate-status/:id — Poll status
+router.get('/full-evaluate-status/:id', verifyToken, async (req, res, next) => {
+  try {
+    const quickEval = await QuickEvaluation.findById(req.params.id);
+    if (!quickEval) {
+      return res.status(404).json({ success: false, message: 'Evaluation not found' });
+    }
+
+    res.json({
+      success: true,
+      status: quickEval.status,
+      errorMessage: quickEval.errorMessage
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/ai/full-evaluate-result/:id — Get full result
+router.get('/full-evaluate-result/:id', verifyToken, async (req, res, next) => {
+  try {
+    const quickEval = await QuickEvaluation.findById(req.params.id);
+    if (!quickEval) {
+      return res.status(404).json({ success: false, message: 'Evaluation not found' });
+    }
+
+    res.json({ success: true, evaluation: quickEval });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/ai/full-evaluations — List all quick evaluations
+router.get('/full-evaluations', verifyToken, async (req, res, next) => {
+  try {
+    const evaluations = await QuickEvaluation.find({ createdBy: req.user.id })
+      .sort({ createdAt: -1 })
+      .select('studentName courseName courseCode status totalMarksObtained totalMaxMarksCalc percentage grade passFail createdAt');
+
+    res.json({ success: true, evaluations });
   } catch (err) {
     next(err);
   }
