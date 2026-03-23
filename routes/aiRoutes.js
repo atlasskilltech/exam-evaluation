@@ -291,25 +291,32 @@ router.post('/full-evaluate',
 
           const result = await fullEvaluate(qpPaths, asPaths, examType || 'descriptive');
 
+          // Helper: extract numeric part from q_no (handles "Q.1", "Q1", "1", 1)
+          const parseQNo = (val) => {
+            if (typeof val === 'number') return val;
+            const num = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
+            return isNaN(num) ? 0 : num;
+          };
+
           // Store extracted questions
-          quickEval.extractedQuestions = result.extractedQuestions.map(q => ({
-            qNo: q.q_no,
+          quickEval.extractedQuestions = result.extractedQuestions.map((q, i) => ({
+            qNo: parseQNo(q.q_no) || (i + 1),
             questionText: q.question_text,
             correctAnswer: q.correct_answer,
-            maxMarks: q.max_marks,
+            maxMarks: parseFloat(q.max_marks) || 0,
             acceptedVariants: q.accepted_variants || [],
             confidence: q.confidence
           }));
 
           // Store evaluation breakdown
           const evaluation = result.evaluation;
-          quickEval.questionBreakdown = evaluation.student_answers.map(sa => ({
-            qNo: sa.q_no,
+          quickEval.questionBreakdown = evaluation.student_answers.map((sa, i) => ({
+            qNo: parseQNo(sa.q_no) || (i + 1),
             questionText: sa.question_text || '',
             studentAnswer: sa.student_answer,
             correctAnswer: sa.correct_answer,
-            marksAwarded: sa.marks_awarded,
-            maxMarks: sa.max_marks,
+            marksAwarded: parseFloat(sa.marks_awarded) || 0,
+            maxMarks: parseFloat(sa.max_marks) || 0,
             isCorrect: sa.is_correct,
             aiConfidence: sa.ai_confidence,
             notes: sa.notes || ''
