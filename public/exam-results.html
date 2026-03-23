@@ -3,163 +3,369 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Exam Results - AI Evaluation</title>
+  <title>Exam Results - AI Evaluation System</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="bg-gray-50 min-h-screen" x-data="examResultsPage()" x-init="init()">
-  <aside class="fixed inset-y-0 left-0 w-64 bg-indigo-700 text-white transform transition-transform z-30"
-         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
-    <div class="p-6 text-xl font-bold border-b border-indigo-600">AI Evaluation</div>
-    <nav class="mt-4 space-y-1 px-3">
-      <a href="/dashboard.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Dashboard</a>
-      <a href="/exams.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Exams</a>
-      <a href="/upload.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Upload</a>
-      <a href="/review.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Review</a>
-      <a href="/results.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Results</a>
-      <a href="/analytics.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Analytics</a>
-      <a href="/import.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Import</a>
-      <a href="#" @click.prevent="logout()" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600 mt-8">Logout</a>
-    </nav>
-  </aside>
+<body class="bg-gray-50 min-h-screen" x-data="examResultsApp()" x-init="init()">
 
-  <div class="lg:hidden fixed top-0 left-0 right-0 bg-indigo-700 text-white p-4 z-20 flex items-center">
-    <button @click="sidebarOpen = !sidebarOpen" class="mr-4">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-    </button>
-    <span class="font-bold">Results</span>
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
   </div>
 
-  <main class="lg:ml-64 p-6 pt-20 lg:pt-6">
-    <!-- Exam Selector -->
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900 mb-4">Exam Results</h1>
-      <select x-model="selectedExam" @change="loadResults()" class="border rounded-lg px-4 py-2.5 w-full max-w-md">
-        <option value="">Select an Exam</option>
-        <template x-for="exam in exams" :key="exam._id">
-          <option :value="exam._id" x-text="exam.name"></option>
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
+        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Exam Results</h1>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <!-- Loading -->
+      <div x-show="pageLoading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+        </svg>
+      </div>
+
+      <div x-show="!pageLoading" x-cloak>
+
+        <!-- ===================== STUDENT VIEW ===================== -->
+        <template x-if="userRole === 'student'">
+          <div>
+            <!-- Exam Selector -->
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Select Exam</label>
+              <select x-model="selectedExamId" @change="loadStudentResults()"
+                      class="w-full max-w-md px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="">-- Choose an exam --</option>
+                <template x-for="exam in exams" :key="exam._id || exam.id">
+                  <option :value="exam._id || exam.id" x-text="exam.name"></option>
+                </template>
+              </select>
+            </div>
+
+            <!-- No exam selected -->
+            <div x-show="!selectedExamId" class="text-center py-16">
+              <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <p class="text-gray-500">Select an exam to view your results.</p>
+            </div>
+
+            <!-- Student Results -->
+            <div x-show="selectedExamId && studentResult">
+              <!-- Welcome Banner -->
+              <div class="bg-gradient-to-r from-indigo-700 to-indigo-900 rounded-xl p-6 mb-6 text-white">
+                <h2 class="text-xl font-bold">Your <span x-text="studentResult.examName || 'Exam'"></span> Results</h2>
+                <p class="text-indigo-200 mt-1 text-sm">View your performance details below.</p>
+              </div>
+
+              <!-- Result Summary Card -->
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <!-- Grade Badge -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-center">
+                  <div class="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2"
+                       :class="{
+                         'bg-green-100 text-green-700': studentResult.grade === 'A' || studentResult.grade === 'A+',
+                         'bg-blue-100 text-blue-700': studentResult.grade === 'B' || studentResult.grade === 'B+',
+                         'bg-yellow-100 text-yellow-700': studentResult.grade === 'C' || studentResult.grade === 'C+',
+                         'bg-orange-100 text-orange-700': studentResult.grade === 'D',
+                         'bg-red-100 text-red-700': studentResult.grade === 'F' || studentResult.grade === 'E'
+                       }">
+                    <span x-text="studentResult.grade || '-'"></span>
+                  </div>
+                  <p class="text-sm text-gray-500">Overall Grade</p>
+                </div>
+
+                <!-- Total Marks -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-center">
+                  <p class="text-3xl font-bold text-gray-900">
+                    <span x-text="studentResult.totalMarks ?? '-'"></span>
+                    <span class="text-lg text-gray-400" x-show="studentResult.maxMarks"> / <span x-text="studentResult.maxMarks"></span></span>
+                  </p>
+                  <p class="text-sm text-gray-500 mt-1">Total Marks</p>
+                </div>
+
+                <!-- Percentage -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-center">
+                  <p class="text-3xl font-bold text-indigo-700" x-text="studentResult.percentage != null ? studentResult.percentage.toFixed(1) + '%' : '-'"></p>
+                  <p class="text-sm text-gray-500 mt-1">Percentage</p>
+                </div>
+
+                <!-- Rank -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-center">
+                  <p class="text-3xl font-bold text-gray-900" x-text="studentResult.rank ? '#' + studentResult.rank : '-'"></p>
+                  <p class="text-sm text-gray-500 mt-1">Class Rank</p>
+                </div>
+              </div>
+
+              <!-- Subject-wise Table -->
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <div class="px-5 py-4 border-b border-gray-100">
+                  <h3 class="font-semibold text-gray-900">Subject-wise Breakdown</h3>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="bg-gray-50 border-b border-gray-200">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Subject</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Obtained</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Max</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">%</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <template x-for="subj in studentResult.subjects || []" :key="subj.name || subj.subjectName">
+                        <tr class="hover:bg-gray-50">
+                          <td class="px-5 py-3 font-medium text-gray-900" x-text="subj.name || subj.subjectName"></td>
+                          <td class="px-5 py-3 text-gray-700" x-text="subj.obtained ?? subj.marks ?? '-'"></td>
+                          <td class="px-5 py-3 text-gray-700" x-text="subj.maxMarks ?? subj.max ?? '-'"></td>
+                          <td class="px-5 py-3 text-gray-700" x-text="subj.percentage != null ? subj.percentage.toFixed(1) + '%' : '-'"></td>
+                          <td class="px-5 py-3">
+                            <span :class="{
+                              'bg-green-100 text-green-800': subj.grade === 'A' || subj.grade === 'A+',
+                              'bg-blue-100 text-blue-800': subj.grade === 'B' || subj.grade === 'B+',
+                              'bg-yellow-100 text-yellow-800': subj.grade === 'C' || subj.grade === 'C+',
+                              'bg-orange-100 text-orange-800': subj.grade === 'D',
+                              'bg-red-100 text-red-800': subj.grade === 'F' || subj.grade === 'E'
+                            }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
+                               x-text="subj.grade || '-'"></span>
+                          </td>
+                        </tr>
+                      </template>
+                      <tr x-show="!studentResult.subjects || studentResult.subjects.length === 0">
+                        <td colspan="5" class="px-5 py-8 text-center text-gray-400">No subject data available.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Download Buttons -->
+              <div class="flex flex-wrap gap-3">
+                <button @click="downloadInvoice()"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-700 text-white text-sm font-medium rounded-lg hover:bg-indigo-800 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  Result Invoice
+                </button>
+                <button @click="downloadGradeSheet()"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  Grade Sheet
+                </button>
+              </div>
+            </div>
+
+            <!-- Loading results -->
+            <div x-show="selectedExamId && !studentResult && resultsLoading" class="flex items-center justify-center py-16">
+              <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+            </div>
+          </div>
         </template>
-      </select>
-    </div>
 
-    <!-- Student View -->
-    <div x-show="isStudent && selectedExam && myResult">
-      <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-xl p-8 text-white mb-6">
-        <h2 class="text-xl font-medium mb-1">Your Results</h2>
-        <p class="text-indigo-200" x-text="selectedExamName"></p>
-      </div>
+        <!-- ===================== ADMIN/TEACHER/PRINCIPAL VIEW ===================== -->
+        <template x-if="userRole !== 'student'">
+          <div>
+            <!-- Exam Selector -->
+            <div class="mb-6 flex flex-col sm:flex-row sm:items-end gap-4">
+              <div class="flex-1 max-w-md">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Select Exam</label>
+                <select x-model="selectedExamId" @change="loadClassResults()"
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                  <option value="">-- Choose an exam --</option>
+                  <template x-for="exam in exams" :key="exam._id || exam.id">
+                    <option :value="exam._id || exam.id" x-text="exam.name"></option>
+                  </template>
+                </select>
+              </div>
+              <button x-show="selectedExamId" @click="exportClassResults()"
+                      class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Export
+              </button>
+            </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-          <div class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-3xl font-bold"
-               :class="myResult.passFail === 'pass' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'"
-               x-text="myResult.overallGrade"></div>
-          <div class="text-sm text-gray-500 mt-2">Grade</div>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-          <div class="text-3xl font-bold text-indigo-700" x-text="myResult.totalMarks + '/' + myResult.totalMaxMarks"></div>
-          <div class="text-sm text-gray-500 mt-2">Total Marks</div>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-          <div class="text-3xl font-bold text-indigo-700" x-text="myResult.overallPercentage + '%'"></div>
-          <div class="text-sm text-gray-500 mt-2">Percentage</div>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-          <div class="text-3xl font-bold text-amber-600" x-text="'#' + (myResult.rank || '-')"></div>
-          <div class="text-sm text-gray-500 mt-2">Rank</div>
-        </div>
-      </div>
+            <!-- No exam selected -->
+            <div x-show="!selectedExamId" class="text-center py-16">
+              <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <p class="text-gray-500">Select an exam to view class results.</p>
+            </div>
 
-      <!-- Subject Table -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <h3 class="font-semibold text-gray-700 mb-4">Subject-wise Breakdown</h3>
-        <table class="w-full text-sm">
-          <thead class="bg-indigo-700 text-white">
-            <tr>
-              <th class="px-4 py-3 text-left">Subject</th>
-              <th class="px-4 py-3 text-center">Obtained</th>
-              <th class="px-4 py-3 text-center">Max</th>
-              <th class="px-4 py-3 text-center">%</th>
-              <th class="px-4 py-3 text-center">Grade</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template x-for="(s, idx) in (myResult.subjects || [])" :key="idx">
-              <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
-                <td class="px-4 py-3" x-text="s.subjectId?.name || 'Subject'"></td>
-                <td class="px-4 py-3 text-center font-medium" x-text="s.marksObtained"></td>
-                <td class="px-4 py-3 text-center" x-text="s.maxMarks"></td>
-                <td class="px-4 py-3 text-center" x-text="s.maxMarks > 0 ? ((s.marksObtained/s.maxMarks)*100).toFixed(1) + '%' : '-'"></td>
-                <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-700" x-text="s.grade"></span></td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
+            <div x-show="selectedExamId && !resultsLoading">
+              <!-- Mini Analytics -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm text-gray-500">Pass Rate</p>
+                      <p class="text-2xl font-bold text-green-600 mt-1" x-text="miniAnalytics.passRate + '%'"></p>
+                    </div>
+                    <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                      <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm text-gray-500">Average Marks</p>
+                      <p class="text-2xl font-bold text-indigo-700 mt-1" x-text="miniAnalytics.avgMarks"></p>
+                    </div>
+                    <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+                      <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm text-gray-500">Top Score</p>
+                      <p class="text-2xl font-bold text-blue-600 mt-1" x-text="miniAnalytics.topScore"></p>
+                    </div>
+                    <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                      <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-      <!-- Download Buttons -->
-      <div class="flex gap-3">
-        <button @click="alert('Grade sheet download available after generation by teacher')" class="px-6 py-2.5 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Download Grade Sheet</button>
-      </div>
-    </div>
+              <!-- Class Results Table -->
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <h3 class="font-semibold text-gray-900">Class Results</h3>
+                  <div class="flex items-center gap-2 text-xs text-gray-500">
+                    <span>Sort by:</span>
+                    <button @click="sortClassResults('rank')" :class="sortBy === 'rank' ? 'text-indigo-700 font-semibold' : ''" class="hover:text-indigo-600">Rank</button>
+                    <span>|</span>
+                    <button @click="sortClassResults('name')" :class="sortBy === 'name' ? 'text-indigo-700 font-semibold' : ''" class="hover:text-indigo-600">Name</button>
+                    <span>|</span>
+                    <button @click="sortClassResults('marks')" :class="sortBy === 'marks' ? 'text-indigo-700 font-semibold' : ''" class="hover:text-indigo-600">Marks</button>
+                  </div>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="bg-gray-50 border-b border-gray-200">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rank</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Roll No</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Marks</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">%</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Result</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <template x-for="(student, idx) in classResults" :key="student._id || student.studentId || idx">
+                        <tr class="hover:bg-gray-50 transition">
+                          <td class="px-5 py-3 font-medium text-gray-900" x-text="student.rank || idx + 1"></td>
+                          <td class="px-5 py-3 text-gray-700" x-text="student.rollNo || '-'"></td>
+                          <td class="px-5 py-3 text-gray-700" x-text="student.name || student.studentName || '-'"></td>
+                          <td class="px-5 py-3 text-gray-700">
+                            <span x-text="student.totalMarks ?? student.marks ?? '-'"></span>
+                            <span class="text-gray-400" x-show="student.maxMarks"> / <span x-text="student.maxMarks"></span></span>
+                          </td>
+                          <td class="px-5 py-3 text-gray-700" x-text="student.percentage != null ? student.percentage.toFixed(1) + '%' : '-'"></td>
+                          <td class="px-5 py-3">
+                            <span :class="{
+                              'bg-green-100 text-green-800': student.grade === 'A' || student.grade === 'A+',
+                              'bg-blue-100 text-blue-800': student.grade === 'B' || student.grade === 'B+',
+                              'bg-yellow-100 text-yellow-800': student.grade === 'C' || student.grade === 'C+',
+                              'bg-orange-100 text-orange-800': student.grade === 'D',
+                              'bg-red-100 text-red-800': student.grade === 'F' || student.grade === 'E'
+                            }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
+                               x-text="student.grade || '-'"></span>
+                          </td>
+                          <td class="px-5 py-3">
+                            <span :class="student.passFail === 'Pass' || student.passed ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
+                                  x-text="student.passFail || (student.passed ? 'Pass' : 'Fail')"></span>
+                          </td>
+                        </tr>
+                      </template>
+                      <tr x-show="classResults.length === 0">
+                        <td colspan="7" class="px-5 py-10 text-center text-gray-400">No results found.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
 
-    <!-- Admin/Teacher/Principal View -->
-    <div x-show="!isStudent && selectedExam">
-      <div class="flex gap-3 mb-4">
-        <div class="bg-white rounded-lg shadow-sm border p-3 text-center flex-1">
-          <div class="text-sm text-gray-500">Pass Rate</div>
-          <div class="text-xl font-bold text-green-600" x-text="(analytics.passRate || 0) + '%'"></div>
-        </div>
-        <div class="bg-white rounded-lg shadow-sm border p-3 text-center flex-1">
-          <div class="text-sm text-gray-500">Avg Marks</div>
-          <div class="text-xl font-bold text-indigo-700" x-text="analytics.avgMarks || 0"></div>
-        </div>
-        <div class="bg-white rounded-lg shadow-sm border p-3 text-center flex-1">
-          <div class="text-sm text-gray-500">Top Score</div>
-          <div class="text-xl font-bold text-amber-600" x-text="analytics.topScore || 0"></div>
-        </div>
+            <!-- Loading results -->
+            <div x-show="selectedExamId && resultsLoading" class="flex items-center justify-center py-16">
+              <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+            </div>
+          </div>
+        </template>
       </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="font-semibold text-gray-700">All Results</h3>
-          <button @click="exportResults()" class="px-4 py-2 bg-indigo-700 text-white rounded-lg text-sm hover:bg-indigo-800">Export</button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-indigo-700 text-white">
-              <tr>
-                <th class="px-4 py-3 text-left cursor-pointer" @click="sortBy('rank')">Rank</th>
-                <th class="px-4 py-3 text-left cursor-pointer" @click="sortBy('name')">Name</th>
-                <th class="px-4 py-3 text-left">Roll No</th>
-                <th class="px-4 py-3 text-center cursor-pointer" @click="sortBy('marks')">Marks</th>
-                <th class="px-4 py-3 text-center">%</th>
-                <th class="px-4 py-3 text-center">Grade</th>
-                <th class="px-4 py-3 text-center">Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="(r, idx) in results" :key="idx">
-                <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
-                  <td class="px-4 py-3 font-medium" x-text="r.rank || idx + 1"></td>
-                  <td class="px-4 py-3" x-text="r.studentId?.userId?.name || 'N/A'"></td>
-                  <td class="px-4 py-3" x-text="r.studentId?.rollNo || '-'"></td>
-                  <td class="px-4 py-3 text-center font-medium" x-text="r.totalMarks + '/' + r.totalMaxMarks"></td>
-                  <td class="px-4 py-3 text-center" x-text="r.overallPercentage + '%'"></td>
-                  <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-700" x-text="r.overallGrade"></span></td>
-                  <td class="px-4 py-3 text-center">
-                    <span class="px-2 py-1 rounded-full text-xs font-medium"
-                          :class="r.passFail === 'pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                          x-text="r.passFail?.toUpperCase()"></span>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <script>
     function api(url, opts = {}) {
@@ -167,60 +373,184 @@
       return fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers } }).then(r => r.json());
     }
 
-    function examResultsPage() {
+    function examResultsApp() {
       return {
-        sidebarOpen: false, exams: [], selectedExam: '', selectedExamName: '',
-        isStudent: false, userRole: '', myResult: null, results: [], analytics: {},
-        sortField: 'rank', sortDir: 1,
+        sidebarOpen: false,
+        currentPage: 'results',
+        userName: '',
+        userRole: '',
+        pageLoading: true,
+        resultsLoading: false,
+        exams: [],
+        selectedExamId: '',
+        studentResult: null,
+        classResults: [],
+        sortBy: 'rank',
+        miniAnalytics: { passRate: 0, avgMarks: 0, topScore: 0 },
 
-        async init() {
-          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
-          try {
-            const payload = JSON.parse(atob(localStorage.getItem('auth_token').split('.')[1]));
-            this.userRole = payload.role;
-            this.isStudent = payload.role === 'student';
-          } catch(e) {}
-          const data = await api('/api/exams?limit=100');
-          this.exams = (data.exams || []).filter(e => this.isStudent ? e.status === 'published' : true);
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        authHeaders() {
+          return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') };
         },
 
-        async loadResults() {
-          if (!this.selectedExam) return;
-          const exam = this.exams.find(e => e._id === this.selectedExam);
-          this.selectedExamName = exam?.name || '';
-          const data = await api(`/api/results/exam-results-screen/${this.selectedExam}`);
-          if (this.isStudent) {
-            this.myResult = data.results?.[0] || null;
-          } else {
-            this.results = data.results || [];
-            this.analytics = data.analytics || {};
+        async init() {
+          const token = localStorage.getItem('auth_token');
+          if (!token) { window.location.href = '/login.html'; return; }
+
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+
+          if (!this.userName || !this.userRole) {
+            try {
+              const res = await fetch('/api/auth/me', { headers: this.authHeaders() });
+              if (!res.ok) { this.logout(); return; }
+              const data = await res.json();
+              const user = data.user || data;
+              this.userName = user.name || user.email || '';
+              this.userRole = user.role || '';
+              localStorage.setItem('user_role', this.userRole);
+              localStorage.setItem('user_name', this.userName);
+            } catch (err) { this.logout(); return; }
+          }
+
+          await this.loadExams();
+          this.pageLoading = false;
+        },
+
+        async loadExams() {
+          try {
+            const url = this.userRole === 'student' ? '/api/exams?status=published' : '/api/exams';
+            const data = await api(url);
+            this.exams = data.exams || data.data || data || [];
+          } catch (err) {
+            console.error('Failed to load exams:', err);
           }
         },
 
-        sortBy(field) {
-          if (this.sortField === field) this.sortDir *= -1;
-          else { this.sortField = field; this.sortDir = 1; }
-          this.results.sort((a, b) => {
-            let va, vb;
-            if (field === 'rank') { va = a.rank || 0; vb = b.rank || 0; }
-            else if (field === 'name') { va = a.studentId?.userId?.name || ''; vb = b.studentId?.userId?.name || ''; return va.localeCompare(vb) * this.sortDir; }
-            else if (field === 'marks') { va = a.totalMarks || 0; vb = b.totalMarks || 0; }
-            return (va - vb) * this.sortDir;
+        async loadStudentResults() {
+          if (!this.selectedExamId) { this.studentResult = null; return; }
+          this.resultsLoading = true;
+          this.studentResult = null;
+          try {
+            const data = await api(`/api/results/exam-results-screen/${this.selectedExamId}`);
+            this.studentResult = {
+              examName: data.examName || data.exam?.name || '',
+              totalMarks: data.totalMarks ?? data.result?.totalMarks ?? null,
+              maxMarks: data.maxMarks ?? data.result?.maxMarks ?? null,
+              percentage: data.percentage ?? data.result?.percentage ?? null,
+              grade: data.grade || data.result?.grade || '',
+              rank: data.rank ?? data.result?.rank ?? null,
+              subjects: data.subjects || data.result?.subjects || [],
+              evaluationId: data.evaluationId || data.result?._id || ''
+            };
+          } catch (err) {
+            console.error('Failed to load student results:', err);
+          } finally {
+            this.resultsLoading = false;
+          }
+        },
+
+        async loadClassResults() {
+          if (!this.selectedExamId) { this.classResults = []; return; }
+          this.resultsLoading = true;
+          try {
+            const data = await api(`/api/results/exam-results-screen/${this.selectedExamId}`);
+            const students = data.results || data.students || data.data || [];
+            this.classResults = students;
+            this.computeMiniAnalytics();
+            this.sortClassResults(this.sortBy);
+          } catch (err) {
+            console.error('Failed to load class results:', err);
+          } finally {
+            this.resultsLoading = false;
+          }
+        },
+
+        computeMiniAnalytics() {
+          if (!this.classResults.length) {
+            this.miniAnalytics = { passRate: 0, avgMarks: 0, topScore: 0 };
+            return;
+          }
+          const total = this.classResults.length;
+          const passed = this.classResults.filter(s => s.passFail === 'Pass' || s.passed).length;
+          const marks = this.classResults.map(s => s.totalMarks ?? s.marks ?? 0);
+          const avg = marks.reduce((a, b) => a + b, 0) / total;
+          const top = Math.max(...marks);
+          this.miniAnalytics = {
+            passRate: ((passed / total) * 100).toFixed(1),
+            avgMarks: avg.toFixed(1),
+            topScore: top
+          };
+        },
+
+        sortClassResults(by) {
+          this.sortBy = by;
+          this.classResults = [...this.classResults].sort((a, b) => {
+            if (by === 'rank') return (a.rank || 999) - (b.rank || 999);
+            if (by === 'name') return (a.name || a.studentName || '').localeCompare(b.name || b.studentName || '');
+            if (by === 'marks') return (b.totalMarks ?? b.marks ?? 0) - (a.totalMarks ?? a.marks ?? 0);
+            return 0;
           });
         },
 
-        async exportResults() {
-          const token = localStorage.getItem('auth_token');
-          const res = await fetch(`/api/csv/export/results?examId=${this.selectedExam}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a'); a.href = url; a.download = 'results.csv'; a.click();
-          URL.revokeObjectURL(url);
+        async downloadInvoice() {
+          try {
+            const evalId = this.studentResult.evaluationId;
+            const data = await api(`/api/results/invoice/${evalId}`, { method: 'POST' });
+            if (data.url || data.downloadUrl) {
+              window.open(data.url || data.downloadUrl, '_blank');
+            }
+          } catch (err) {
+            console.error('Failed to generate invoice:', err);
+          }
         },
 
-        logout() { localStorage.removeItem('auth_token'); window.location.href = '/login.html'; }
+        async downloadGradeSheet() {
+          try {
+            const data = await api(`/api/results/gradesheet/${this.selectedExamId}/me`, { method: 'POST' });
+            if (data.url || data.downloadUrl) {
+              window.open(data.url || data.downloadUrl, '_blank');
+            }
+          } catch (err) {
+            console.error('Failed to generate grade sheet:', err);
+          }
+        },
+
+        async exportClassResults() {
+          try {
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`/api/csv/export/results?examId=${this.selectedExamId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `results_${this.selectedExamId}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+          } catch (err) {
+            console.error('Failed to export:', err);
+          }
+        },
+
+        logout() {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
+          window.location.href = '/login.html';
+        }
       };
     }
   </script>

@@ -3,145 +3,280 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Analytics - AI Evaluation</title>
+  <title>Analytics - AI Evaluation System</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="bg-gray-50 min-h-screen" x-data="analyticsPage()" x-init="init()">
-  <aside class="fixed inset-y-0 left-0 w-64 bg-indigo-700 text-white transform transition-transform z-30"
-         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
-    <div class="p-6 text-xl font-bold border-b border-indigo-600">AI Evaluation</div>
-    <nav class="mt-4 space-y-1 px-3">
-      <a href="/dashboard.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Dashboard</a>
-      <a href="/exams.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Exams</a>
-      <a href="/upload.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Upload</a>
-      <a href="/review.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Review</a>
-      <a href="/results.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Results</a>
-      <a href="/analytics.html" class="block px-4 py-2.5 rounded-lg bg-indigo-800">Analytics</a>
-      <a href="/import.html" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600">Import</a>
-      <a href="#" @click.prevent="logout()" class="block px-4 py-2.5 rounded-lg hover:bg-indigo-600 mt-8">Logout</a>
-    </nav>
-  </aside>
+<body class="bg-gray-50 min-h-screen" x-data="analyticsApp()" x-init="init()">
 
-  <div class="lg:hidden fixed top-0 left-0 right-0 bg-indigo-700 text-white p-4 z-20 flex items-center">
-    <button @click="sidebarOpen = !sidebarOpen" class="mr-4">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-    </button>
-    <span class="font-bold">Analytics</span>
+  <!-- Mobile sidebar overlay -->
+  <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 lg:hidden">
+    <div class="absolute inset-0 bg-black/50" @click="sidebarOpen = false"></div>
   </div>
 
-  <main class="lg:ml-64 p-6 pt-20 lg:pt-6">
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Analytics Dashboard</h1>
-
-    <!-- Exam Selector -->
-    <div class="mb-6">
-      <select x-model="selectedExam" @change="loadAnalytics()" class="border rounded-lg px-4 py-2.5 w-full max-w-md">
-        <option value="">Select an Exam</option>
-        <template x-for="exam in exams" :key="exam._id">
-          <option :value="exam._id" x-text="exam.name"></option>
-        </template>
-      </select>
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+      <button @click="sidebarOpen = false" class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
     </div>
 
-    <div x-show="selectedExam">
-      <!-- Stats Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div class="text-sm text-gray-500">Total Students</div>
-          <div class="text-3xl font-bold text-indigo-700 mt-1" x-text="overview.totalStudents"></div>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div class="text-sm text-gray-500">Pass Rate</div>
-          <div class="text-3xl font-bold text-green-600 mt-1" x-text="overview.passRate + '%'"></div>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div class="text-sm text-gray-500">Class Average</div>
-          <div class="text-3xl font-bold text-indigo-700 mt-1" x-text="overview.classAverage + '%'"></div>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div class="text-sm text-gray-500">Top Score</div>
-          <div class="text-3xl font-bold text-amber-600 mt-1" x-text="overview.highestScore"></div>
-        </div>
-      </div>
+    <nav class="px-3 py-4 space-y-1">
+      <template x-for="item in navItems" :key="item.href">
+        <a :href="item.href"
+           :class="currentPage === item.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span x-html="item.icon" class="w-5 h-5 flex-shrink-0"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
 
-      <!-- Charts -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 class="font-semibold text-gray-700 mb-4">Subject-wise Average Marks</h3>
-          <canvas id="subjectChart"></canvas>
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-semibold text-sm"
+             x-text="userName.charAt(0).toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate" x-text="userName"></p>
+          <p class="text-xs text-gray-500 capitalize" x-text="userRole"></p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 class="font-semibold text-gray-700 mb-4">Grade Distribution</h3>
-          <canvas id="gradeChart"></canvas>
-        </div>
-      </div>
-
-      <!-- Class Comparison -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <h3 class="font-semibold text-gray-700 mb-4">Class Comparison</h3>
-        <canvas id="classChart"></canvas>
-      </div>
-
-      <!-- Top Performers -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <h3 class="font-semibold text-gray-700 mb-4">Top Performers</h3>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-indigo-700 text-white">
-              <tr>
-                <th class="px-4 py-3 text-left">Rank</th>
-                <th class="px-4 py-3 text-left">Name</th>
-                <th class="px-4 py-3 text-left">Roll No</th>
-                <th class="px-4 py-3 text-center">Marks</th>
-                <th class="px-4 py-3 text-center">%</th>
-                <th class="px-4 py-3 text-center">Grade</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="(p, idx) in topPerformers" :key="idx">
-                <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
-                  <td class="px-4 py-3 font-medium" x-text="p.rank"></td>
-                  <td class="px-4 py-3" x-text="p.studentName"></td>
-                  <td class="px-4 py-3" x-text="p.rollNo"></td>
-                  <td class="px-4 py-3 text-center font-medium" x-text="p.totalMarks"></td>
-                  <td class="px-4 py-3 text-center" x-text="p.percentage + '%'"></td>
-                  <td class="px-4 py-3 text-center">
-                    <span class="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700" x-text="p.grade"></span>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Teacher Activity (superadmin only) -->
-      <div x-show="userRole === 'superadmin'" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 class="font-semibold text-gray-700 mb-4">Teacher Activity</h3>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-indigo-700 text-white">
-              <tr>
-                <th class="px-4 py-3 text-left">Teacher</th>
-                <th class="px-4 py-3 text-center">Evaluations Approved</th>
-                <th class="px-4 py-3 text-center">Marks Overridden</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="(t, idx) in teachers" :key="idx">
-                <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'">
-                  <td class="px-4 py-3" x-text="t.teacherName"></td>
-                  <td class="px-4 py-3 text-center" x-text="t.evaluationsApproved"></td>
-                  <td class="px-4 py-3 text-center" x-text="t.marksOverridden"></td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
+        <button @click="logout()" class="text-gray-400 hover:text-red-600 transition" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
       </div>
     </div>
-  </main>
+  </aside>
+
+  <!-- Main content -->
+  <div class="lg:ml-64">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Analytics</h1>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <!-- Loading -->
+      <div x-show="pageLoading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+        </svg>
+      </div>
+
+      <div x-show="!pageLoading" x-cloak>
+        <!-- Exam Selector -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Select Exam</label>
+          <select x-model="selectedExamId" @change="loadAnalytics()"
+                  class="w-full max-w-md px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">-- Choose an exam --</option>
+            <template x-for="exam in exams" :key="exam._id || exam.id">
+              <option :value="exam._id || exam.id" x-text="exam.name"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- No exam selected -->
+        <div x-show="!selectedExamId" class="text-center py-16">
+          <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          <p class="text-gray-500">Select an exam to view analytics.</p>
+        </div>
+
+        <!-- Analytics Loading -->
+        <div x-show="selectedExamId && analyticsLoading" class="flex items-center justify-center py-16">
+          <svg class="animate-spin w-8 h-8 text-indigo-700" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+          </svg>
+        </div>
+
+        <!-- Analytics Content -->
+        <div x-show="selectedExamId && !analyticsLoading">
+          <!-- Overview Stat Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-gray-500">Total Students</p>
+                  <p class="text-2xl font-bold text-gray-900 mt-1" x-text="overview.totalStudents || 0"></p>
+                </div>
+                <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+                  <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-gray-500">Pass Rate</p>
+                  <p class="text-2xl font-bold text-green-600 mt-1" x-text="(overview.passRate || 0) + '%'"></p>
+                </div>
+                <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                  <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-gray-500">Class Average</p>
+                  <p class="text-2xl font-bold text-indigo-700 mt-1" x-text="overview.classAverage || 0"></p>
+                </div>
+                <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+                  <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-gray-500">Top Score</p>
+                  <p class="text-2xl font-bold text-blue-600 mt-1" x-text="overview.topScore || 0"></p>
+                </div>
+                <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                  <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Subject Performance Bar Chart -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <h3 class="font-semibold text-gray-900 mb-4">Subject Performance</h3>
+              <div class="relative" style="height: 300px;">
+                <canvas id="subjectChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Grade Distribution Doughnut -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <h3 class="font-semibold text-gray-900 mb-4">Grade Distribution</h3>
+              <div class="relative" style="height: 300px;">
+                <canvas id="gradeChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Class Comparison Chart -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+            <h3 class="font-semibold text-gray-900 mb-4">Class Comparison</h3>
+            <div class="relative" style="height: 300px;">
+              <canvas id="classChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Top Performers Table -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+            <div class="px-5 py-4 border-b border-gray-100">
+              <h3 class="font-semibold text-gray-900">Top Performers</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50 border-b border-gray-200">
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rank</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Roll No</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Marks</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">%</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="(p, idx) in topPerformers" :key="p._id || idx">
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-5 py-3">
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold"
+                              :class="{
+                                'bg-yellow-100 text-yellow-800': (p.rank || idx + 1) === 1,
+                                'bg-gray-200 text-gray-700': (p.rank || idx + 1) === 2,
+                                'bg-orange-100 text-orange-700': (p.rank || idx + 1) === 3,
+                                'bg-gray-50 text-gray-600': (p.rank || idx + 1) > 3
+                              }" x-text="p.rank || idx + 1"></span>
+                      </td>
+                      <td class="px-5 py-3 font-medium text-gray-900" x-text="p.name || p.studentName || '-'"></td>
+                      <td class="px-5 py-3 text-gray-700" x-text="p.rollNo || '-'"></td>
+                      <td class="px-5 py-3 text-gray-700" x-text="p.totalMarks ?? p.marks ?? '-'"></td>
+                      <td class="px-5 py-3 text-gray-700" x-text="p.percentage != null ? p.percentage.toFixed(1) + '%' : '-'"></td>
+                      <td class="px-5 py-3">
+                        <span :class="{
+                          'bg-green-100 text-green-800': p.grade === 'A' || p.grade === 'A+',
+                          'bg-blue-100 text-blue-800': p.grade === 'B' || p.grade === 'B+',
+                          'bg-yellow-100 text-yellow-800': p.grade === 'C' || p.grade === 'C+',
+                          'bg-orange-100 text-orange-800': p.grade === 'D',
+                          'bg-red-100 text-red-800': p.grade === 'F' || p.grade === 'E'
+                        }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
+                           x-text="p.grade || '-'"></span>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="topPerformers.length === 0">
+                    <td colspan="6" class="px-5 py-8 text-center text-gray-400">No data available.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Teacher Activity (superadmin only) -->
+          <div x-show="userRole === 'superadmin'" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100">
+              <h3 class="font-semibold text-gray-900">Teacher Activity</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50 border-b border-gray-200">
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Teacher</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Approved</th>
+                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Overrides</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="t in teacherActivity" :key="t._id || t.teacherId || t.name">
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-5 py-3 font-medium text-gray-900" x-text="t.name || t.teacherName || '-'"></td>
+                      <td class="px-5 py-3 text-gray-700" x-text="t.approved ?? t.approvedCount ?? 0"></td>
+                      <td class="px-5 py-3 text-gray-700" x-text="t.overrides ?? t.overrideCount ?? 0"></td>
+                    </tr>
+                  </template>
+                  <tr x-show="teacherActivity.length === 0">
+                    <td colspan="3" class="px-5 py-8 text-center text-gray-400">No teacher activity data.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 
   <script>
     function api(url, opts = {}) {
@@ -149,104 +284,223 @@
       return fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers } }).then(r => r.json());
     }
 
-    function analyticsPage() {
+    function analyticsApp() {
       return {
         sidebarOpen: false,
-        exams: [],
-        selectedExam: '',
+        currentPage: 'analytics',
+        userName: '',
         userRole: '',
+        pageLoading: true,
+        analyticsLoading: false,
+        exams: [],
+        selectedExamId: '',
         overview: {},
         topPerformers: [],
-        teachers: [],
-        subjectChart: null,
-        gradeChart: null,
-        classChart: null,
+        teacherActivity: [],
+        charts: { subject: null, grade: null, class: null },
+
+        navItems: [
+          { id: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>' },
+          { id: 'exams', label: 'Exams', href: '/exams.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'upload', label: 'Upload', href: '/upload.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>' },
+          { id: 'review', label: 'Review', href: '/review.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>' },
+          { id: 'results', label: 'Results', href: '/results.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+          { id: 'analytics', label: 'Analytics', href: '/analytics.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
+          { id: 'import', label: 'Import', href: '/import.html', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4 4l-4 4m0 0l-4-4m4 4V4"/></svg>' },
+        ],
+
+        authHeaders() {
+          return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') };
+        },
 
         async init() {
-          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          const token = localStorage.getItem('auth_token');
+          if (!token) { window.location.href = '/login.html'; return; }
+
+          this.userName = localStorage.getItem('user_name') || '';
+          this.userRole = localStorage.getItem('user_role') || '';
+
+          if (!this.userName || !this.userRole) {
+            try {
+              const res = await fetch('/api/auth/me', { headers: this.authHeaders() });
+              if (!res.ok) { this.logout(); return; }
+              const data = await res.json();
+              const user = data.user || data;
+              this.userName = user.name || user.email || '';
+              this.userRole = user.role || '';
+              localStorage.setItem('user_role', this.userRole);
+              localStorage.setItem('user_name', this.userName);
+            } catch (err) { this.logout(); return; }
+          }
+
+          await this.loadExams();
+          this.pageLoading = false;
+        },
+
+        async loadExams() {
           try {
-            const payload = JSON.parse(atob(localStorage.getItem('auth_token').split('.')[1]));
-            this.userRole = payload.role;
-          } catch(e) {}
-          const data = await api('/api/exams?limit=100');
-          this.exams = data.exams || [];
+            const data = await api('/api/exams');
+            this.exams = data.exams || data.data || data || [];
+          } catch (err) {
+            console.error('Failed to load exams:', err);
+          }
         },
 
         async loadAnalytics() {
-          if (!this.selectedExam) return;
-          const id = this.selectedExam;
+          if (!this.selectedExamId) return;
+          this.analyticsLoading = true;
 
-          const [ov, sp, gd, tp, cc] = await Promise.all([
-            api(`/api/analytics/overview/${id}`),
-            api(`/api/analytics/subject-performance/${id}`),
-            api(`/api/analytics/grade-distribution/${id}`),
-            api(`/api/analytics/top-performers/${id}?limit=10`),
-            api(`/api/analytics/class-comparison?examId=${id}`)
-          ]);
+          try {
+            const [overviewData, subjectData, gradeData, classData, topData] = await Promise.all([
+              api(`/api/analytics/overview/${this.selectedExamId}`),
+              api(`/api/analytics/subject-performance/${this.selectedExamId}`),
+              api(`/api/analytics/grade-distribution/${this.selectedExamId}`),
+              api(`/api/analytics/class-comparison?examId=${this.selectedExamId}`),
+              api(`/api/analytics/top-performers/${this.selectedExamId}`)
+            ]);
 
-          this.overview = ov;
-          this.topPerformers = tp.topPerformers || [];
+            this.overview = overviewData.data || overviewData || {};
+            this.topPerformers = topData.data || topData.performers || topData || [];
 
-          // Subject chart
-          if (this.subjectChart) this.subjectChart.destroy();
-          const subjects = sp.subjects || [];
-          this.subjectChart = new Chart(document.getElementById('subjectChart'), {
+            // Load teacher activity if superadmin
+            if (this.userRole === 'superadmin') {
+              try {
+                const taData = await api('/api/analytics/teacher-activity');
+                this.teacherActivity = taData.data || taData.teachers || taData || [];
+              } catch (e) {
+                console.error('Failed to load teacher activity:', e);
+              }
+            }
+
+            // Render charts after DOM update
+            this.$nextTick(() => {
+              this.renderSubjectChart(subjectData.data || subjectData.subjects || subjectData || []);
+              this.renderGradeChart(gradeData.data || gradeData.grades || gradeData || []);
+              this.renderClassChart(classData.data || classData.classes || classData || []);
+            });
+          } catch (err) {
+            console.error('Failed to load analytics:', err);
+          } finally {
+            this.analyticsLoading = false;
+          }
+        },
+
+        renderSubjectChart(data) {
+          if (this.charts.subject) this.charts.subject.destroy();
+          const ctx = document.getElementById('subjectChart');
+          if (!ctx) return;
+
+          const subjects = Array.isArray(data) ? data : [];
+          this.charts.subject = new Chart(ctx, {
             type: 'bar',
             data: {
-              labels: subjects.map(s => s.subjectName),
+              labels: subjects.map(s => s.subject || s.name || s.subjectName || ''),
               datasets: [{
                 label: 'Average Marks',
-                data: subjects.map(s => s.avgMarks),
-                backgroundColor: '#818cf8'
+                data: subjects.map(s => s.average || s.avgMarks || s.avg || 0),
+                backgroundColor: 'rgba(67, 56, 202, 0.8)',
+                borderColor: 'rgba(67, 56, 202, 1)',
+                borderWidth: 1,
+                borderRadius: 6
               }]
             },
-            options: { responsive: true, plugins: { legend: { display: false } } }
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                x: { grid: { display: false } }
+              }
+            }
           });
+        },
 
-          // Grade chart
-          if (this.gradeChart) this.gradeChart.destroy();
-          const dist = gd.distribution || [];
-          this.gradeChart = new Chart(document.getElementById('gradeChart'), {
+        renderGradeChart(data) {
+          if (this.charts.grade) this.charts.grade.destroy();
+          const ctx = document.getElementById('gradeChart');
+          if (!ctx) return;
+
+          const grades = Array.isArray(data) ? data : [];
+          const colors = [
+            'rgba(34, 197, 94, 0.8)',
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(67, 56, 202, 0.8)',
+            'rgba(234, 179, 8, 0.8)',
+            'rgba(249, 115, 22, 0.8)',
+            'rgba(239, 68, 68, 0.8)',
+            'rgba(156, 163, 175, 0.8)'
+          ];
+          const borderColors = colors.map(c => c.replace('0.8', '1'));
+
+          this.charts.grade = new Chart(ctx, {
             type: 'doughnut',
             data: {
-              labels: dist.map(d => d.grade),
+              labels: grades.map(g => g.grade || g.label || ''),
               datasets: [{
-                data: dist.map(d => d.count),
-                backgroundColor: ['#4338ca', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe']
+                data: grades.map(g => g.count || g.value || 0),
+                backgroundColor: colors.slice(0, grades.length),
+                borderColor: borderColors.slice(0, grades.length),
+                borderWidth: 2
               }]
             },
-            options: { responsive: true }
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'right', labels: { padding: 16, usePointStyle: true } }
+              }
+            }
           });
+        },
 
-          // Class comparison chart
-          if (this.classChart) this.classChart.destroy();
-          const comp = cc.comparison || [];
-          this.classChart = new Chart(document.getElementById('classChart'), {
+        renderClassChart(data) {
+          if (this.charts.class) this.charts.class.destroy();
+          const ctx = document.getElementById('classChart');
+          if (!ctx) return;
+
+          const classes = Array.isArray(data) ? data : [];
+          this.charts.class = new Chart(ctx, {
             type: 'bar',
             data: {
-              labels: comp.map(c => c.group),
-              datasets: [{
-                label: 'Average Marks',
-                data: comp.map(c => c.avgMarks),
-                backgroundColor: '#6366f1'
-              }, {
-                label: 'Students',
-                data: comp.map(c => c.studentCount),
-                backgroundColor: '#a5b4fc'
-              }]
+              labels: classes.map(c => c.className || c.class || c.name || ''),
+              datasets: [
+                {
+                  label: 'Average',
+                  data: classes.map(c => c.average || c.avg || 0),
+                  backgroundColor: 'rgba(67, 56, 202, 0.8)',
+                  borderRadius: 6
+                },
+                {
+                  label: 'Highest',
+                  data: classes.map(c => c.highest || c.max || c.topScore || 0),
+                  backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                  borderRadius: 6
+                },
+                {
+                  label: 'Lowest',
+                  data: classes.map(c => c.lowest || c.min || 0),
+                  backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                  borderRadius: 6
+                }
+              ]
             },
-            options: { responsive: true }
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } } },
+              scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                x: { grid: { display: false } }
+              }
+            }
           });
-
-          // Teacher activity
-          if (this.userRole === 'superadmin') {
-            const ta = await api('/api/analytics/teacher-activity');
-            this.teachers = ta.teachers || [];
-          }
         },
 
         logout() {
           localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_role');
+          localStorage.removeItem('user_name');
           window.location.href = '/login.html';
         }
       };
