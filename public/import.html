@@ -98,6 +98,11 @@
                     class="pb-3 text-sm font-medium border-b-2 transition">
               Import Answer Key
             </button>
+            <button @click="activeTab = 'scanpaper'"
+                    :class="activeTab === 'scanpaper' ? 'border-indigo-700 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                    class="pb-3 text-sm font-medium border-b-2 transition">
+              Generate from Question Paper
+            </button>
           </nav>
         </div>
 
@@ -315,6 +320,129 @@
           </div>
         </div>
 
+        <!-- ===================== SCAN QUESTION PAPER TAB ===================== -->
+        <div x-show="activeTab === 'scanpaper'">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div class="mb-6">
+              <h3 class="font-semibold text-gray-900">Generate Answer Key from Question Paper</h3>
+              <p class="text-sm text-gray-500 mt-1">Upload scanned images of a question paper. AI will extract questions and generate the answer key automatically.</p>
+            </div>
+
+            <!-- Exam & Subject Selectors -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Exam</label>
+                <select x-model="qpExamId" @change="loadQpSubjects()"
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                  <option value="">-- Select Exam --</option>
+                  <template x-for="exam in exams" :key="exam._id || exam.id">
+                    <option :value="exam._id || exam.id" x-text="exam.name"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+                <select x-model="qpSubjectId"
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        :disabled="!qpExamId">
+                  <option value="">-- Select Subject --</option>
+                  <template x-for="subj in qpSubjects" :key="subj._id || subj.id">
+                    <option :value="subj._id || subj.id" x-text="subj.name || subj.subjectName"></option>
+                  </template>
+                </select>
+              </div>
+            </div>
+
+            <!-- File Upload -->
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Upload Question Paper Images</label>
+              <input type="file" accept=".jpg,.jpeg,.png" multiple @change="onQpFileSelect($event)"
+                     class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                     x-ref="qpFileInput">
+              <p class="text-xs text-gray-400 mt-1">Upload 1-10 scanned images (JPG/PNG) of the question paper. Pages will be sorted by filename.</p>
+            </div>
+
+            <!-- Image Preview -->
+            <div x-show="qpFiles && qpFiles.length > 0" class="mb-6">
+              <h4 class="text-sm font-medium text-gray-700 mb-2" x-text="'Selected: ' + (qpFiles ? qpFiles.length : 0) + ' image(s)'"></h4>
+              <div class="flex flex-wrap gap-3">
+                <template x-for="(preview, idx) in qpPreviews" :key="idx">
+                  <div class="relative w-24 h-24 border border-gray-200 rounded-lg overflow-hidden">
+                    <img :src="preview" class="w-full h-full object-cover">
+                    <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs text-center py-0.5" x-text="'Page ' + (idx + 1)"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Extract Button -->
+            <button @click="extractAnswerKey()" :disabled="!qpFiles || !qpSubjectId || qpExtracting"
+                    x-show="qpFiles && qpFiles.length > 0 && qpSubjectId"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-700 text-white text-sm font-medium rounded-lg hover:bg-indigo-800 disabled:opacity-50 transition">
+              <span x-show="!qpExtracting">Extract Answer Key with AI</span>
+              <span x-show="qpExtracting" class="flex items-center gap-2">
+                <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                AI is extracting... Please wait
+              </span>
+            </button>
+
+            <!-- Status / Progress -->
+            <div x-show="qpStatus === 'processing'" x-cloak class="mt-6">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+                <svg class="animate-spin w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                <span class="text-sm text-blue-700 font-medium">AI is reading the question paper and extracting answers. This may take a minute...</span>
+              </div>
+            </div>
+
+            <!-- Error -->
+            <div x-show="qpStatus === 'failed'" x-cloak class="mt-6">
+              <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 class="font-medium text-red-800 mb-1">Extraction Failed</h4>
+                <p class="text-sm text-red-600" x-text="qpError"></p>
+                <button @click="qpStatus = ''; qpError = ''" class="mt-2 text-xs text-red-700 underline hover:no-underline">Dismiss</button>
+              </div>
+            </div>
+
+            <!-- Success Result -->
+            <div x-show="qpStatus === 'completed'" x-cloak class="mt-6">
+              <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <h4 class="font-medium text-green-800 mb-2">Answer Key Generated Successfully!</h4>
+                <div class="flex gap-6 text-sm">
+                  <span class="text-green-700">Questions extracted: <strong x-text="qpResult?.questionCount || 0"></strong></span>
+                  <span class="text-blue-700">AI Confidence: <strong x-text="qpResult?.confidence ? (qpResult.confidence * 100).toFixed(0) + '%' : 'N/A'"></strong></span>
+                </div>
+                <p x-show="qpResult?.notes" class="text-xs text-gray-600 mt-2" x-text="'AI Notes: ' + (qpResult?.notes || '')"></p>
+              </div>
+
+              <!-- Extracted Questions Table -->
+              <div x-show="qpResult?.answerKey?.questions?.length > 0" class="overflow-x-auto border border-gray-200 rounded-lg mb-4">
+                <table class="w-full text-xs">
+                  <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200">
+                      <th class="px-3 py-2 text-left font-semibold text-gray-500">Q.No</th>
+                      <th class="px-3 py-2 text-left font-semibold text-gray-500">Correct Answer</th>
+                      <th class="px-3 py-2 text-left font-semibold text-gray-500">Max Marks</th>
+                      <th class="px-3 py-2 text-left font-semibold text-gray-500">Accepted Variants</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <template x-for="q in (qpResult?.answerKey?.questions || [])" :key="q.qNo">
+                      <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 text-gray-700 font-medium" x-text="q.qNo"></td>
+                        <td class="px-3 py-2 text-gray-700" x-text="q.correctAnswer"></td>
+                        <td class="px-3 py-2 text-gray-700" x-text="q.maxMarks"></td>
+                        <td class="px-3 py-2 text-gray-500" x-text="(q.acceptedVariants || []).join(', ') || '-'"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+
+              <p class="text-xs text-gray-500">The answer key has been saved. You can review and edit it from the Answer Key section, or proceed to upload student answer sheets for evaluation.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- ===================== IMPORT HISTORY ===================== -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -399,6 +527,18 @@
         akPreview: [],
         akPreviewHeaders: [],
         akImportResult: null,
+
+        // Question paper scan
+        qpExamId: '',
+        qpSubjectId: '',
+        qpSubjects: [],
+        qpFiles: null,
+        qpPreviews: [],
+        qpExtracting: false,
+        qpStatus: '',   // '' | 'processing' | 'completed' | 'failed'
+        qpError: '',
+        qpResult: null,
+        qpPollTimer: null,
 
         // History
         importHistory: [],
@@ -562,6 +702,92 @@
           } finally {
             this.importing = false;
           }
+        },
+
+        async loadQpSubjects() {
+          this.qpSubjectId = '';
+          this.qpSubjects = [];
+          if (!this.qpExamId) return;
+          try {
+            const exam = this.exams.find(e => (e._id || e.id) === this.qpExamId);
+            if (exam && exam.subjects) {
+              this.qpSubjects = exam.subjects;
+            } else {
+              const data = await api(`/api/exams/${this.qpExamId}`);
+              this.qpSubjects = data.subjects || data.exam?.subjects || [];
+            }
+          } catch (err) {
+            console.error('Failed to load subjects:', err);
+          }
+        },
+
+        onQpFileSelect(event) {
+          const files = Array.from(event.target.files || []);
+          if (files.length === 0) { this.qpFiles = null; this.qpPreviews = []; return; }
+          this.qpFiles = files;
+          this.qpStatus = '';
+          this.qpResult = null;
+          this.qpPreviews = [];
+          files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => this.qpPreviews.push(e.target.result);
+            reader.readAsDataURL(file);
+          });
+        },
+
+        async extractAnswerKey() {
+          if (!this.qpFiles || !this.qpSubjectId) return;
+          this.qpExtracting = true;
+          this.qpStatus = 'processing';
+          this.qpError = '';
+          this.qpResult = null;
+          try {
+            const formData = new FormData();
+            this.qpFiles.forEach(f => formData.append('images', f));
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`/api/ai/extract-answer-key/${this.qpSubjectId}`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: formData
+            });
+            const data = await res.json();
+            if (!data.success) {
+              this.qpStatus = 'failed';
+              this.qpError = data.message || 'Failed to start extraction';
+              this.qpExtracting = false;
+              return;
+            }
+            // Start polling for result
+            this.pollExtraction();
+          } catch (err) {
+            this.qpStatus = 'failed';
+            this.qpError = err.message || 'Network error';
+            this.qpExtracting = false;
+          }
+        },
+
+        pollExtraction() {
+          if (this.qpPollTimer) clearInterval(this.qpPollTimer);
+          this.qpPollTimer = setInterval(async () => {
+            try {
+              const data = await api(`/api/ai/extract-status/${this.qpSubjectId}`);
+              if (data.status === 'completed') {
+                clearInterval(this.qpPollTimer);
+                this.qpPollTimer = null;
+                this.qpStatus = 'completed';
+                this.qpResult = data;
+                this.qpExtracting = false;
+              } else if (data.status === 'failed') {
+                clearInterval(this.qpPollTimer);
+                this.qpPollTimer = null;
+                this.qpStatus = 'failed';
+                this.qpError = data.error || 'Extraction failed';
+                this.qpExtracting = false;
+              }
+            } catch (err) {
+              console.error('Poll error:', err);
+            }
+          }, 3000);
         },
 
         downloadStudentTemplate() {
