@@ -204,4 +204,80 @@ async function evaluateBatch(batchId) {
   }
 }
 
-module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callClaudeVision };
+// ── Extract Answer Key from Question Paper ─────────────────
+function buildAnswerKeyExtractionPrompt(totalQuestions, marksPerQuestion, examType) {
+  return `You are an expert academic question paper analyzer.
+
+You are given scanned images of a QUESTION PAPER (not an answer sheet).
+Exam Type: ${examType} (mcq / descriptive / mixed)
+Expected number of questions: ${totalQuestions}
+Default marks per question: ${marksPerQuestion}
+
+INSTRUCTIONS:
+1. Carefully read ALL provided images in order (they are pages of ONE question paper)
+2. Identify each question number, the question text, and the correct answer
+3. For MCQ: Extract the correct option (A/B/C/D or the answer text)
+4. For Descriptive: Extract the model/expected answer or key points
+5. For each question, determine the marks (use the value printed on the paper, or default to ${marksPerQuestion})
+6. Include common accepted variants of the answer (alternate spellings, abbreviations, etc.)
+7. If a question is not clearly visible, still include it with your best reading and lower confidence
+
+CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code fences. Just raw JSON.
+
+Required JSON format:
+{
+  "questions": [
+    {
+      "q_no": 1,
+      "question_text": "What is the capital of France?",
+      "correct_answer": "Paris",
+      "max_marks": ${marksPerQuestion},
+      "accepted_variants": ["paris"],
+      "confidence": 0.95
+    }
+  ],
+  "total_questions_found": ${totalQuestions},
+  "reading_confidence": 0.90,
+  "notes": "Any observations about the paper quality or readability"
+}`;
+}
+
+async function extractAnswerKeyFromPaper(imagePaths, totalQuestions, marksPerQuestion, examType) {
+  const imageContents = await prepareImages(imagePaths);
+  const prompt = buildAnswerKeyExtractionPrompt(totalQuestions, marksPerQuestion, examType);
+
+  const response = await axios.post(
+    'https://api.anthropic.com/v1/messages',
+    {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: [
+          ...imageContents,
+          { type: 'text', text: prompt }
+        ]
+      }]
+    },
+    {
+      headers: {
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      timeout: 120000
+    }
+  );
+
+  let rawText = response.data.content[0].text;
+  rawText = rawText.replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(rawText);
+
+  if (!parsed.questions || !Array.isArray(parsed.questions)) {
+    throw new Error('AI returned invalid format: missing questions array');
+  }
+
+  return parsed;
+}
+
+module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callClaudeVision, extractAnswerKeyFromPaper };
