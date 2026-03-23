@@ -280,4 +280,83 @@ async function extractAnswerKeyFromPaper(imagePaths, totalQuestions, marksPerQue
   return parsed;
 }
 
-module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callClaudeVision, extractAnswerKeyFromPaper };
+// ── Full Evaluation: Question Paper + Answer Sheet in one go ─────
+function buildFullEvaluationPrompt(extractedQuestions, examType) {
+  return `You are an expert answer sheet evaluator for academic examinations.
+
+Exam Type: ${examType} (mcq / descriptive / mixed)
+
+ANSWER KEY (extracted from the question paper):
+${extractedQuestions.map(q =>
+  `Q${q.q_no}: Question = "${q.question_text}" | Correct Answer = "${q.correct_answer}" | Max Marks = ${q.max_marks}${
+    q.accepted_variants && q.accepted_variants.length ? ` | Also accept: ${q.accepted_variants.join(', ')}` : ''
+  }`
+).join('\n')}
+
+INSTRUCTIONS:
+1. Carefully read ALL provided images in the order given (they are pages of ONE student's answer sheet)
+2. Identify each question number written by the student
+3. Extract the student's handwritten answer for each question accurately
+4. For MCQ type: Award full marks if answer matches correctAnswer OR any acceptedVariants (case-insensitive trim comparison)
+5. For Descriptive type: Award partial marks proportional to keyword coverage, concept accuracy, relevance, and depth of explanation. Be fair and generous — if the student demonstrates understanding of the core concepts, award proportional marks even if wording differs from the model answer.
+6. For Mixed type: Apply MCQ rules to MCQ questions and descriptive rules to descriptive questions
+7. If a question is skipped or blank: marksAwarded = 0
+8. ai_confidence: your confidence in reading that specific answer (0.0 = very unsure, 1.0 = certain)
+9. reading_confidence: overall confidence in reading the entire sheet
+
+CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code fences. Just raw JSON.
+
+Required JSON format:
+{
+  "student_answers": [
+    {
+      "q_no": 1,
+      "question_text": "Brief question text",
+      "student_answer": "The student's actual written answer (summarized if very long)",
+      "correct_answer": "Expected answer",
+      "marks_awarded": 3,
+      "max_marks": 5,
+      "is_correct": false,
+      "ai_confidence": 0.85,
+      "notes": "Partial marks — covered 2 out of 3 key concepts"
+    }
+  ],
+  "total_marks_obtained": 22,
+  "total_max_marks": 40,
+  "percentage": 55.0,
+  "remarks": "Overall assessment of the student's performance.",
+  "reading_confidence": 0.88
+}`;
+}
+
+async function fullEvaluate(questionPaperPaths, answerSheetPaths, examType = 'descriptive') {
+  // Step 1: Extract questions from question paper
+  const qpImageContents = await prepareImages(questionPaperPaths);
+  const extractionPrompt = buildAnswerKeyExtractionPrompt(0, 0, examType)
+    .replace('Expected number of questions: 0', 'Identify ALL questions from the paper')
+    .replace('Default marks per question: 0', 'Read marks from the paper for each question');
+
+  const extractedData = await callClaudeVision(qpImageContents, extractionPrompt);
+
+  if (!extractedData.questions || !Array.isArray(extractedData.questions)) {
+    throw new Error('Failed to extract questions from question paper');
+  }
+
+  // Step 2: Evaluate answer sheet against extracted questions
+  const asImageContents = await prepareImages(answerSheetPaths);
+  const evalPrompt = buildFullEvaluationPrompt(extractedData.questions, examType);
+  const evalResult = await callClaudeVision(asImageContents, evalPrompt);
+
+  if (!evalResult.student_answers || !Array.isArray(evalResult.student_answers)) {
+    throw new Error('Failed to evaluate answer sheet');
+  }
+
+  return {
+    extractedQuestions: extractedData.questions,
+    extractionConfidence: extractedData.reading_confidence,
+    extractionNotes: extractedData.notes,
+    evaluation: evalResult
+  };
+}
+
+module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callClaudeVision, extractAnswerKeyFromPaper, fullEvaluate };
