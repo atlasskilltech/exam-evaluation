@@ -6,7 +6,7 @@ const AnswerKey = require('../models/AnswerKey');
 const Evaluation = require('../models/Evaluation');
 const { calculateGrade } = require('../utils/helpers');
 
-// STEP 1 — Image Preparation
+// STEP 1 — Image Preparation (OpenAI format)
 async function prepareImages(imagePaths) {
   const contents = [];
   for (const imgPath of imagePaths) {
@@ -17,11 +17,10 @@ async function prepareImages(imagePaths) {
     if (ext === '.png') mediaType = 'image/png';
 
     contents.push({
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: mediaType,
-        data: base64
+      type: 'image_url',
+      image_url: {
+        url: `data:${mediaType};base64,${base64}`,
+        detail: 'high'
       }
     });
   }
@@ -77,12 +76,12 @@ Required JSON format:
 }`;
 }
 
-// STEP 3 — Claude Vision API Call
-async function callClaudeVision(imageContents, promptText) {
+// STEP 3 — OpenAI Vision API Call
+async function callOpenAIVision(imageContents, promptText) {
   const response = await axios.post(
-    'https://api.anthropic.com/v1/messages',
+    'https://api.openai.com/v1/chat/completions',
     {
-      model: 'claude-sonnet-4-20250514',
+      model: process.env.OPENAI_MODEL || 'gpt-4o',
       max_tokens: 4096,
       messages: [{
         role: 'user',
@@ -94,15 +93,14 @@ async function callClaudeVision(imageContents, promptText) {
     },
     {
       headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
       },
       timeout: 120000
     }
   );
 
-  let rawText = response.data.content[0].text;
+  let rawText = response.data.choices[0].message.content;
   rawText = rawText.replace(/```json|```/g, '').trim();
   const parsed = JSON.parse(rawText);
 
@@ -185,7 +183,7 @@ async function evaluateBatch(batchId) {
 
     const imageContents = await prepareImages(imagePaths);
     const prompt = buildEvaluationPrompt(answerKey, batch.examId.type, batch.subjectId.name);
-    const aiResult = await callClaudeVision(imageContents, prompt);
+    const aiResult = await callOpenAIVision(imageContents, prompt);
     const evaluationId = await storeEvaluation(batchId, aiResult, batch.examId, batch, batch.examId.gradingScale);
 
     return {
@@ -247,9 +245,9 @@ async function extractAnswerKeyFromPaper(imagePaths, totalQuestions, marksPerQue
   const prompt = buildAnswerKeyExtractionPrompt(totalQuestions, marksPerQuestion, examType);
 
   const response = await axios.post(
-    'https://api.anthropic.com/v1/messages',
+    'https://api.openai.com/v1/chat/completions',
     {
-      model: 'claude-sonnet-4-20250514',
+      model: process.env.OPENAI_MODEL || 'gpt-4o',
       max_tokens: 4096,
       messages: [{
         role: 'user',
@@ -261,15 +259,14 @@ async function extractAnswerKeyFromPaper(imagePaths, totalQuestions, marksPerQue
     },
     {
       headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
       },
       timeout: 120000
     }
   );
 
-  let rawText = response.data.content[0].text;
+  let rawText = response.data.choices[0].message.content;
   rawText = rawText.replace(/```json|```/g, '').trim();
   const parsed = JSON.parse(rawText);
 
@@ -336,7 +333,7 @@ async function fullEvaluate(questionPaperPaths, answerSheetPaths, examType = 'de
     .replace('Expected number of questions: 0', 'Identify ALL questions from the paper')
     .replace('Default marks per question: 0', 'Read marks from the paper for each question');
 
-  const extractedData = await callClaudeVision(qpImageContents, extractionPrompt);
+  const extractedData = await callOpenAIVision(qpImageContents, extractionPrompt);
 
   if (!extractedData.questions || !Array.isArray(extractedData.questions)) {
     throw new Error('Failed to extract questions from question paper');
@@ -345,7 +342,7 @@ async function fullEvaluate(questionPaperPaths, answerSheetPaths, examType = 'de
   // Step 2: Evaluate answer sheet against extracted questions
   const asImageContents = await prepareImages(answerSheetPaths);
   const evalPrompt = buildFullEvaluationPrompt(extractedData.questions, examType);
-  const evalResult = await callClaudeVision(asImageContents, evalPrompt);
+  const evalResult = await callOpenAIVision(asImageContents, evalPrompt);
 
   if (!evalResult.student_answers || !Array.isArray(evalResult.student_answers)) {
     throw new Error('Failed to evaluate answer sheet');
@@ -359,4 +356,4 @@ async function fullEvaluate(questionPaperPaths, answerSheetPaths, examType = 'de
   };
 }
 
-module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callClaudeVision, extractAnswerKeyFromPaper, fullEvaluate };
+module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callOpenAIVision, extractAnswerKeyFromPaper, fullEvaluate };
