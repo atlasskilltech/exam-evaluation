@@ -415,16 +415,16 @@ async function generateRubricsFromPdf(pdfFilePath) {
     // Text-based: send as plain text prompt
     messages = [{ role: 'user', content: prompt }];
   } else {
-    // Scanned/image PDF: send as base64 to Vision API
+    // Scanned/image PDF: send PDF as file content to OpenAI
     const base64Pdf = pdfBuffer.toString('base64');
     messages = [{
       role: 'user',
       content: [
         {
-          type: 'image_url',
-          image_url: {
-            url: `data:application/pdf;base64,${base64Pdf}`,
-            detail: 'high'
+          type: 'file',
+          file: {
+            filename: 'question_paper.pdf',
+            file_data: `data:application/pdf;base64,${base64Pdf}`
           }
         },
         { type: 'text', text: prompt }

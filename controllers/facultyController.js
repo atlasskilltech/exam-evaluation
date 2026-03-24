@@ -406,7 +406,10 @@ exports.generateRubrics = async (req, res, next) => {
       paperSummary: result.paper_summary || '',
       confidence: result.confidence || 0
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    console.error('generateRubrics error:', err.response?.data || err.message);
+    next(err);
+  }
 };
 
 exports.getFacultyDashboard = async (req, res, next) => {
