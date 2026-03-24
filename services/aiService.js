@@ -364,25 +364,39 @@ ${pdfText}
 ---
 
 INSTRUCTIONS:
-1. Identify ALL questions from the paper (including sub-questions like 1a, 1b - treat each sub-question as a separate entry)
-2. For each question, determine:
-   - The question number (as printed)
+1. Read the question paper carefully and identify its EXACT structure — sections, question numbers, and sub-parts (a, b, c, etc.)
+2. Preserve the EXACT question numbering as printed on the paper. For example:
+   - If the paper has "Q1 (a)", "Q1 (b)", "Q2 (a)", use q_no: "1a", "1b", "2a" etc.
+   - If the paper has "Section A: Q1, Q2" and "Section B: Q3, Q4", preserve that numbering
+   - If a question has sub-parts, each sub-part must be a SEPARATE entry with its own marks and rubric
+3. For each question/sub-part, determine:
+   - The question number EXACTLY as printed (e.g., "1a", "1b", "2", "3a", "3b", "3c")
    - A brief title/description of what the question asks
-   - The maximum marks (read from the paper, or estimate based on context)
-   - A detailed rubric/marking criteria that a faculty member should use when evaluating student answers
-3. The rubric should include:
+   - The maximum marks for THAT specific question/sub-part (read from paper)
+   - A detailed rubric/marking criteria for evaluating student answers
+4. The rubric should include:
    - Key points/concepts that must be present for full marks
    - Partial marking guidelines (e.g., "2 marks for definition, 3 marks for explanation with examples")
    - Common mistakes to watch for
-4. Be specific and actionable in rubric descriptions
+5. Be specific and actionable in rubric descriptions
 
 CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code fences. Just raw JSON.
+
+EXAMPLE - If a paper has: Q1 (a) Define X [5 marks], Q1 (b) Explain Y [5 marks], Q2 Write about Z [10 marks]
+Then output:
+{
+  "questions": [
+    { "q_no": "1a", "title": "Define X", "max_marks": 5, "rubric": "..." },
+    { "q_no": "1b", "title": "Explain Y", "max_marks": 5, "rubric": "..." },
+    { "q_no": "2", "title": "Write about Z", "max_marks": 10, "rubric": "..." }
+  ], ...
+}
 
 Required JSON format:
 {
   "questions": [
     {
-      "q_no": 1,
+      "q_no": "1a",
       "title": "Brief description of what the question asks",
       "max_marks": 10,
       "rubric": "Detailed marking criteria: 2 marks for correct definition, 3 marks for explanation with at least 2 examples, 3 marks for diagram, 2 marks for real-world application. Deduct 1 mark if examples are not relevant."

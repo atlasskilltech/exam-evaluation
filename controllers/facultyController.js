@@ -393,7 +393,7 @@ exports.generateRubrics = async (req, res, next) => {
 
     // Map AI response to our question format
     const questions = result.questions.map((q, idx) => ({
-      qNo: idx + 1,
+      qNo: String(q.q_no || (idx + 1)),
       title: q.title || '',
       maxMarks: q.max_marks || 10,
       rubric: q.rubric || ''

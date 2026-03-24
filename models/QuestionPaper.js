@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const questionSchema = new mongoose.Schema({
-  qNo:      { type: Number, required: true },
+  qNo:      { type: String, required: true },
   title:    { type: String, default: '' },
   maxMarks: { type: Number, required: true },
   rubric:   { type: String, default: '' }

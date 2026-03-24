@@ -145,7 +145,10 @@
               <template x-for="(q, idx) in questions" :key="idx">
                 <div class="border border-gray-200 rounded-lg p-4 hover:border-indigo-200 transition">
                   <div class="flex items-start gap-4">
-                    <div class="flex-shrink-0 w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-700 font-semibold text-sm" x-text="'Q' + q.qNo"></div>
+                    <div class="flex-shrink-0">
+                      <label class="block text-xs font-medium text-gray-500 mb-1">Q No.</label>
+                      <input type="text" x-model="q.qNo" class="w-14 h-10 bg-indigo-50 rounded-lg text-center text-indigo-700 font-semibold text-sm border border-indigo-200 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="1a">
+                    </div>
                     <div class="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label class="block text-xs font-medium text-gray-500 mb-1">Question Title</label>
@@ -243,12 +246,11 @@
         },
 
         addQuestion() {
-          this.questions.push({ qNo: this.questions.length + 1, title: '', maxMarks: 10, rubric: '' });
+          this.questions.push({ qNo: String(this.questions.length + 1), title: '', maxMarks: 10, rubric: '' });
         },
 
         removeQuestion(idx) {
           this.questions.splice(idx, 1);
-          this.questions.forEach((q, i) => q.qNo = i + 1);
         },
 
         async generateRubrics() {
