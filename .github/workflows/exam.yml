@@ -1,0 +1,34 @@
+name: Deploy to EC2 Server of atlasliving/Exam_Evaluation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}   # EC2 Public IP
+          EC2_USER: ${{ secrets.EC2_USER }}   # ubuntu
+          EC2_KEY: ${{ secrets.EC2_SSH_KEY }} # PEM key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$EC2_KEY" > ~/.ssh/key.pem
+          chmod 600 ~/.ssh/key.pem
+
+          ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+            cd /home/ubuntu/exam-evaluation
+            git pull origin main
+            npm ci --only=production
+            pm2 restart exam-evaluation || pm2 start server.js --name exam-evaluation
+            pm2 save
+          EOF
+
+          rm -f ~/.ssh/key.pem
