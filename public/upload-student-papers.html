@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Student Papers - AI Evaluation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="uploadPapers()" x-init="init()">
+
+  <!-- Sidebar -->
+  <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+         class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+      <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">AI Eval</span>
+    </div>
+    <nav class="px-3 py-4 space-y-1">
+      <a href="/dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+        Dashboard</a>
+      <a href="/manage-faculty.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Faculty</a>
+      <a href="/question-config.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Question Config</a>
+      <a href="/upload-student-papers.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm bg-indigo-50 text-indigo-700 font-semibold">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Upload Papers</a>
+    </nav>
+  </aside>
+
+  <div class="lg:ml-64">
+    <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
+      <button @click="sidebarOpen = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <h1 class="text-xl font-bold text-gray-900">Upload Student Answer Sheets</h1>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <div x-show="successMsg" x-cloak class="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm" x-text="successMsg"></div>
+      <div x-show="errorMsg" x-cloak class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm" x-text="errorMsg"></div>
+
+      <!-- Upload Form -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h2 class="text-base font-semibold text-gray-900 mb-4">Upload Answer Sheets</h2>
+        <form @submit.prevent="uploadPapers()" enctype="multipart/form-data">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Exam</label>
+              <select x-model="selectedExamId" @change="onExamChange()" required
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="">-- Select Exam --</option>
+                <template x-for="e in exams" :key="e._id"><option :value="e._id" x-text="e.name"></option></template>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+              <select x-model="selectedSubjectId" required
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="">-- Select Subject --</option>
+                <template x-for="s in subjects" :key="s._id"><option :value="s._id" x-text="s.name + (s.code ? ' (' + s.code + ')' : '')"></option></template>
+              </select>
+            </div>
+          </div>
+
+          <!-- File entries -->
+          <div class="space-y-3 mb-4">
+            <template x-for="(entry, idx) in fileEntries" :key="idx">
+              <div class="border border-gray-200 rounded-lg p-4 flex items-center gap-4">
+                <span class="text-sm font-medium text-gray-500 w-8" x-text="'#' + (idx+1)"></span>
+                <div class="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <input type="text" x-model="entry.studentName" placeholder="Student Name"
+                         class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <input type="text" x-model="entry.rollNo" placeholder="Roll Number"
+                         class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" @change="entry.file = $event.target.files[0]" required
+                         class="block w-full text-sm text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700">
+                </div>
+                <button type="button" @click="removeEntry(idx)" x-show="fileEntries.length > 1" class="text-red-400 hover:text-red-600">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button type="button" @click="addEntry()"
+                    class="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              Add More
+            </button>
+            <button type="submit" :disabled="uploading"
+                    class="inline-flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white px-6 py-2 rounded-lg text-sm font-medium transition disabled:opacity-60">
+              <svg x-show="uploading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+              <span x-text="uploading ? 'Uploading...' : 'Upload Papers'"></span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Assign to Faculty -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6" x-show="selectedExamId && selectedSubjectId">
+        <h2 class="text-base font-semibold text-gray-900 mb-4">Bulk Assign to Faculty</h2>
+        <div class="flex items-center gap-4">
+          <select x-model="assignFacultyId" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="">-- Select Faculty --</option>
+            <template x-for="f in facultyList" :key="f._id"><option :value="f._id" x-text="f.name + ' (' + f.email + ')'"></option></template>
+          </select>
+          <button @click="bulkAssign()" :disabled="!assignFacultyId"
+                  class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-60">
+            Assign All Unassigned
+          </button>
+        </div>
+      </div>
+
+      <!-- Uploaded Papers List -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-base font-semibold text-gray-900">Uploaded Papers</h2>
+          <button @click="loadPapers()" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">Refresh</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b border-gray-100">
+                <th class="px-5 py-3 font-medium">#</th>
+                <th class="px-5 py-3 font-medium">Student</th>
+                <th class="px-5 py-3 font-medium">Roll No</th>
+                <th class="px-5 py-3 font-medium">Subject</th>
+                <th class="px-5 py-3 font-medium">Status</th>
+                <th class="px-5 py-3 font-medium">Assigned To</th>
+                <th class="px-5 py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <template x-for="(p, idx) in papers" :key="p._id">
+                <tr class="hover:bg-gray-50">
+                  <td class="px-5 py-3 text-gray-400" x-text="idx + 1"></td>
+                  <td class="px-5 py-3 font-medium" x-text="p.studentName || '-'"></td>
+                  <td class="px-5 py-3" x-text="p.rollNo || '-'"></td>
+                  <td class="px-5 py-3" x-text="p.subjectId?.name || '-'"></td>
+                  <td class="px-5 py-3">
+                    <span :class="{
+                      'bg-gray-100 text-gray-800': p.status === 'uploaded',
+                      'bg-yellow-100 text-yellow-800': p.status === 'assigned',
+                      'bg-blue-100 text-blue-800': p.status === 'evaluating',
+                      'bg-green-100 text-green-800': p.status === 'evaluated',
+                      'bg-indigo-100 text-indigo-800': p.status === 'approved'
+                    }" class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize" x-text="p.status"></span>
+                  </td>
+                  <td class="px-5 py-3" x-text="p.assignedTo?.name || 'Unassigned'"></td>
+                  <td class="px-5 py-3">
+                    <a :href="p.answerSheetPdf" target="_blank" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">View PDF</a>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="papers.length === 0"><td colspan="7" class="px-5 py-8 text-center text-gray-400">No papers uploaded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function uploadPapers() {
+      return {
+        sidebarOpen: false, successMsg: '', errorMsg: '', uploading: false,
+        exams: [], subjects: [], facultyList: [], papers: [],
+        selectedExamId: '', selectedSubjectId: '', assignFacultyId: '',
+        fileEntries: [{ studentName: '', rollNo: '', file: null }],
+
+        authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') }; },
+
+        async init() {
+          if (!localStorage.getItem('auth_token')) { window.location.href = '/login.html'; return; }
+          await Promise.all([this.loadExams(), this.loadFaculty()]);
+        },
+
+        async loadExams() {
+          try { const r = await fetch('/api/exams', { headers: this.authHeaders() }); if (r.ok) { const d = await r.json(); this.exams = d.exams || []; } } catch (e) { console.error(e); }
+        },
+
+        async onExamChange() {
+          this.subjects = []; this.selectedSubjectId = '';
+          if (!this.selectedExamId) return;
+          try { const r = await fetch('/api/exams/' + this.selectedExamId + '/subjects', { headers: this.authHeaders() }); if (r.ok) { const d = await r.json(); this.subjects = d.subjects || []; } } catch (e) { console.error(e); }
+        },
+
+        async loadFaculty() {
+          try { const r = await fetch('/api/faculty/list', { headers: this.authHeaders() }); if (r.ok) { const d = await r.json(); this.facultyList = d.faculty || []; } } catch (e) { console.error(e); }
+        },
+
+        async loadPapers() {
+          let url = '/api/faculty/student-papers?';
+          if (this.selectedExamId) url += 'examId=' + this.selectedExamId + '&';
+          if (this.selectedSubjectId) url += 'subjectId=' + this.selectedSubjectId;
+          try { const r = await fetch(url, { headers: this.authHeaders() }); if (r.ok) { const d = await r.json(); this.papers = d.papers || []; } } catch (e) { console.error(e); }
+        },
+
+        addEntry() { this.fileEntries.push({ studentName: '', rollNo: '', file: null }); },
+        removeEntry(idx) { this.fileEntries.splice(idx, 1); },
+
+        async uploadPapers() {
+          this.successMsg = ''; this.errorMsg = ''; this.uploading = true;
+          try {
+            const formData = new FormData();
+            formData.append('examId', this.selectedExamId);
+            formData.append('subjectId', this.selectedSubjectId);
+
+            const names = []; const rolls = [];
+            this.fileEntries.forEach(e => {
+              if (e.file) {
+                formData.append('answerSheets', e.file);
+                names.push(e.studentName);
+                rolls.push(e.rollNo);
+              }
+            });
+            formData.append('studentNames', JSON.stringify(names));
+            formData.append('rollNos', JSON.stringify(rolls));
+
+            const r = await fetch('/api/faculty/student-papers', {
+              method: 'POST',
+              headers: { 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') },
+              body: formData
+            });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.message);
+            this.successMsg = d.count + ' paper(s) uploaded successfully!';
+            this.fileEntries = [{ studentName: '', rollNo: '', file: null }];
+            await this.loadPapers();
+          } catch (e) { this.errorMsg = e.message; }
+          finally { this.uploading = false; }
+        },
+
+        async bulkAssign() {
+          this.successMsg = ''; this.errorMsg = '';
+          try {
+            const r = await fetch('/api/faculty/bulk-assign', {
+              method: 'POST', headers: this.authHeaders(),
+              body: JSON.stringify({ examId: this.selectedExamId, subjectId: this.selectedSubjectId, facultyId: this.assignFacultyId })
+            });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.message);
+            this.successMsg = d.count + ' paper(s) assigned!';
+            await this.loadPapers();
+          } catch (e) { this.errorMsg = e.message; }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

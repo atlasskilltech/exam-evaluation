@@ -31,6 +31,7 @@ app.use('/api/csv',           require('./routes/csvRoutes'));
 app.use('/api/results',       require('./routes/resultRoutes'));
 app.use('/api/analytics',     require('./routes/analyticsRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/faculty',       require('./routes/facultyRoutes'));
 
 // ── 404 Handler ──────────────────────────────────────────────
 app.use('/api/*', (req, res) => {

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evaluate Answer Sheet - Faculty Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .pdf-container { height: calc(100vh - 140px); }
+    .score-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .score-input { -moz-appearance: textfield; }
+  </style>
+</head>
+<body class="bg-gray-900 min-h-screen" x-data="evaluateApp()" x-init="init()">
+
+  <!-- Top Bar -->
+  <header class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between z-50 relative">
+    <div class="flex items-center gap-4">
+      <a href="/faculty-dashboard.html" class="text-gray-400 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+      </a>
+      <span class="text-white font-semibold">Back</span>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <span class="text-gray-400">ID: <span class="text-white font-mono" x-text="paper?.rollNo || paper?._id?.slice(-6) || '-'"></span></span>
+      <span class="text-gray-600">|</span>
+      <span class="text-gray-400">Subject: <span class="text-cyan-400 font-medium" x-text="paper?.subjectId?.name || '-'"></span></span>
+      <span class="text-gray-600">|</span>
+      <span class="text-gray-400">Time: <span class="text-white font-mono" x-text="formatTime(elapsedTime)"></span></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs px-2 py-1 rounded" :class="connectionClass" x-text="saveStatus"></span>
+    </div>
+  </header>
+
+  <!-- Loading -->
+  <div x-show="pageLoading" class="flex items-center justify-center h-screen bg-gray-900">
+    <svg class="animate-spin w-10 h-10 text-teal-500" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+    </svg>
+  </div>
+
+  <!-- Main Layout -->
+  <div x-show="!pageLoading" x-cloak class="flex h-[calc(100vh-52px)]">
+
+    <!-- Left: Page Navigation -->
+    <div class="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-2 gap-1 overflow-y-auto">
+      <template x-for="n in totalPages" :key="n">
+        <button @click="currentPage = n"
+                :class="currentPage === n ? 'bg-teal-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+                class="w-8 h-8 rounded-lg text-xs font-medium flex items-center justify-center transition"
+                x-text="n"></button>
+      </template>
+    </div>
+
+    <!-- Left: PDF/Image Viewer -->
+    <div class="flex-1 bg-gray-900 relative overflow-hidden flex flex-col">
+      <!-- Zoom controls -->
+      <div class="absolute top-3 right-3 z-10 flex items-center gap-1 bg-gray-800/90 rounded-lg px-2 py-1">
+        <button @click="zoom = Math.max(0.5, zoom - 0.1)" class="text-gray-400 hover:text-white p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+        </button>
+        <span class="text-xs text-gray-300 w-10 text-center" x-text="Math.round(zoom * 100) + '%'"></span>
+        <button @click="zoom = Math.min(3, zoom + 0.1)" class="text-gray-400 hover:text-white p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        </button>
+      </div>
+
+      <!-- Page info -->
+      <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-gray-800/90 rounded-lg px-3 py-1 text-xs text-gray-300">
+        Page <span x-text="currentPage"></span> of <span x-text="totalPages"></span>
+      </div>
+
+      <!-- PDF viewer area -->
+      <div class="flex-1 overflow-auto flex items-start justify-center p-4 pdf-container">
+        <div x-show="pdfUrl" class="transition-transform" :style="'transform: scale(' + zoom + '); transform-origin: top center;'">
+          <!-- For PDF files, use iframe -->
+          <iframe x-show="isPdf" :src="pdfUrl + '#page=' + currentPage" class="w-[800px] h-[1100px] bg-white rounded shadow-lg"></iframe>
+          <!-- For image files -->
+          <img x-show="!isPdf" :src="pdfUrl" class="max-w-full rounded shadow-lg" alt="Answer Sheet">
+        </div>
+        <div x-show="!pdfUrl" class="text-gray-500 text-center py-20">
+          <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <p>No answer sheet loaded</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Evaluation Panel -->
+    <div class="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+      <!-- Student Info -->
+      <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="font-semibold text-gray-900 text-sm" x-text="paper?.studentName || 'Student'"></p>
+            <p class="text-xs text-gray-500" x-text="'Roll: ' + (paper?.rollNo || '-')"></p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-gray-500">Total Score</p>
+            <p class="text-lg font-bold" :class="totalScore > 0 ? 'text-teal-600' : 'text-gray-400'"
+               x-text="totalScore.toFixed(1) + ' / ' + maxTotalMarks.toFixed(1)"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Questions Header -->
+      <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex text-xs font-medium text-gray-500">
+        <span class="w-16">Question</span>
+        <span class="flex-1 text-center">Out of</span>
+        <span class="w-20 text-center">Score</span>
+      </div>
+
+      <!-- Questions List -->
+      <div class="flex-1 overflow-y-auto">
+        <template x-for="(q, idx) in questionMarks" :key="idx">
+          <div class="px-4 py-2.5 border-b border-gray-100 flex items-center hover:bg-gray-50 transition"
+               :class="activeQuestion === idx ? 'bg-teal-50 border-l-4 border-l-teal-500' : ''"
+               @click="activeQuestion = idx">
+            <!-- Question number button -->
+            <button class="w-10 h-10 rounded-lg text-sm font-semibold flex items-center justify-center flex-shrink-0 transition"
+                    :class="q.marksAwarded > 0 ? 'bg-green-100 text-green-700' : (q.marksAwarded === 0 && q.touched ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600')"
+                    x-text="'Q' + q.qNo"></button>
+
+            <!-- Out of marks -->
+            <span class="flex-1 text-center text-sm text-gray-600" x-text="q.maxMarks"></span>
+
+            <!-- Score input -->
+            <div class="w-20 flex-shrink-0">
+              <input type="number" min="0" :max="q.maxMarks" step="0.5"
+                     x-model.number="q.marksAwarded"
+                     @input="q.touched = true; autoSave()"
+                     @focus="activeQuestion = idx"
+                     class="score-input w-full text-center px-2 py-1.5 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition"
+                     :class="q.marksAwarded > q.maxMarks ? 'border-red-300 bg-red-50' : 'border-gray-300'"
+                     :disabled="isReadOnly">
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Active Question Detail -->
+      <div x-show="activeQuestion !== null && questionPaper?.questions?.[activeQuestion]" x-cloak
+           class="px-4 py-3 bg-blue-50 border-t border-blue-200 max-h-32 overflow-y-auto">
+        <p class="text-xs font-semibold text-blue-800 mb-1" x-text="'Q' + (activeQuestion + 1) + ':'"></p>
+        <p class="text-xs text-blue-700" x-text="questionPaper?.questions?.[activeQuestion]?.title || 'No title'"></p>
+        <p x-show="questionPaper?.questions?.[activeQuestion]?.rubric" class="text-xs text-blue-600 mt-1 italic"
+           x-text="'Rubric: ' + (questionPaper?.questions?.[activeQuestion]?.rubric || '')"></p>
+      </div>
+
+      <!-- Comment for active question -->
+      <div x-show="activeQuestion !== null" x-cloak class="px-4 py-2 border-t border-gray-200">
+        <textarea x-model="questionMarks[activeQuestion]?.comment" @input="autoSave()" rows="2"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+                  placeholder="Add comment for this question..." :disabled="isReadOnly"></textarea>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="px-4 py-3 bg-gray-50 border-t border-gray-200 space-y-2">
+        <!-- Calculate Total -->
+        <button @click="calculateTotal()"
+                class="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          Calculate Total Score : <span x-text="totalScore.toFixed(1) + ' / ' + maxTotalMarks.toFixed(1)"></span>
+        </button>
+
+        <div class="grid grid-cols-2 gap-2" x-show="!isReadOnly">
+          <!-- Reset -->
+          <button @click="resetPaper()"
+                  class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition">
+            Reset Paper
+          </button>
+          <!-- Submit -->
+          <button @click="submitEvaluation()" :disabled="saving"
+                  class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition disabled:opacity-60">
+            <span x-text="saving ? 'Saving...' : 'Submit'"></span>
+          </button>
+        </div>
+
+        <div x-show="isReadOnly" class="text-center text-sm text-gray-500 py-1">
+          This evaluation is <span class="font-medium" x-text="existingEvaluation?.status || 'read-only'"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Total Pages info at bottom -->
+  <div x-show="!pageLoading && paper" x-cloak
+       class="fixed bottom-0 left-12 right-80 bg-gray-800 border-t border-gray-700 px-4 py-1.5 flex items-center justify-between z-40">
+    <div class="flex items-center gap-4 text-xs text-gray-400">
+      <span>Total Pages: <span class="text-white" x-text="totalPages"></span></span>
+      <span>Visited: <span class="text-green-400" x-text="visitedPages.size"></span></span>
+      <span>Not Visited: <span class="text-red-400" x-text="totalPages - visitedPages.size"></span></span>
+    </div>
+    <div class="flex items-center gap-1">
+      <template x-for="n in totalPages" :key="'p'+n">
+        <button @click="currentPage = n"
+                :class="visitedPages.has(n) ? 'bg-green-500' : 'bg-red-500'"
+                class="w-5 h-5 rounded text-[10px] text-white font-medium flex items-center justify-center"
+                x-text="n"></button>
+      </template>
+    </div>
+  </div>
+
+  <script>
+    function evaluateApp() {
+      return {
+        pageLoading: true,
+        paperId: '',
+        paper: null,
+        questionPaper: null,
+        existingEvaluation: null,
+        questionMarks: [],
+        activeQuestion: null,
+        currentPage: 1,
+        totalPages: 10,
+        visitedPages: new Set([1]),
+        zoom: 1,
+        pdfUrl: '',
+        isPdf: true,
+        elapsedTime: 0,
+        timerInterval: null,
+        saveStatus: 'Ready',
+        connectionClass: 'bg-gray-600 text-gray-200',
+        saving: false,
+        autoSaveTimeout: null,
+
+        get totalScore() {
+          return this.questionMarks.reduce((s, q) => s + (parseFloat(q.marksAwarded) || 0), 0);
+        },
+        get maxTotalMarks() {
+          return this.questionMarks.reduce((s, q) => s + (q.maxMarks || 0), 0);
+        },
+        get isReadOnly() {
+          return this.existingEvaluation?.status === 'approved';
+        },
+
+        authHeaders() {
+          return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') };
+        },
+
+        async init() {
+          const token = localStorage.getItem('auth_token');
+          if (!token) { window.location.href = '/faculty-login.html'; return; }
+
+          const params = new URLSearchParams(window.location.search);
+          this.paperId = params.get('paperId');
+          if (!this.paperId) { window.location.href = '/faculty-dashboard.html'; return; }
+
+          try {
+            const res = await fetch('/api/faculty/evaluate/' + this.paperId, { headers: this.authHeaders() });
+            if (!res.ok) { const d = await res.json(); alert(d.message || 'Failed to load'); window.location.href = '/faculty-dashboard.html'; return; }
+
+            const data = await res.json();
+            this.paper = data.paper;
+            this.questionPaper = data.questionPaper;
+            this.existingEvaluation = data.evaluation;
+
+            // Set PDF URL
+            if (this.paper?.answerSheetPdf) {
+              this.pdfUrl = this.paper.answerSheetPdf;
+              this.isPdf = this.pdfUrl.toLowerCase().endsWith('.pdf');
+            }
+
+            // Initialize question marks
+            if (this.existingEvaluation?.questionMarks?.length > 0) {
+              this.questionMarks = this.existingEvaluation.questionMarks.map(q => ({ ...q, touched: true }));
+            } else if (this.questionPaper?.questions?.length > 0) {
+              this.questionMarks = this.questionPaper.questions.map(q => ({
+                qNo: q.qNo, maxMarks: q.maxMarks, marksAwarded: 0, comment: '', touched: false
+              }));
+            } else {
+              // Default 5 questions
+              for (let i = 1; i <= 5; i++) {
+                this.questionMarks.push({ qNo: i, maxMarks: 10, marksAwarded: 0, comment: '', touched: false });
+              }
+            }
+
+            this.totalPages = this.paper?.totalPages || 10;
+
+            // Start timer
+            this.startTimer();
+          } catch (err) {
+            console.error(err);
+            alert('Error loading evaluation data');
+          } finally {
+            this.pageLoading = false;
+          }
+        },
+
+        startTimer() {
+          this.elapsedTime = this.existingEvaluation?.timeTaken || 0;
+          this.timerInterval = setInterval(() => { this.elapsedTime++; }, 1000);
+        },
+
+        formatTime(seconds) {
+          const h = Math.floor(seconds / 3600);
+          const m = Math.floor((seconds % 3600) / 60);
+          const s = seconds % 60;
+          return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        },
+
+        calculateTotal() {
+          // Force recalculate (computed property already handles this)
+          this.saveStatus = 'Total: ' + this.totalScore.toFixed(1) + '/' + this.maxTotalMarks.toFixed(1);
+          this.connectionClass = 'bg-teal-600 text-white';
+        },
+
+        resetPaper() {
+          if (!confirm('Reset all marks to 0?')) return;
+          this.questionMarks.forEach(q => { q.marksAwarded = 0; q.comment = ''; q.touched = false; });
+          this.saveStatus = 'Reset';
+          this.connectionClass = 'bg-yellow-500 text-white';
+        },
+
+        autoSave() {
+          clearTimeout(this.autoSaveTimeout);
+          this.autoSaveTimeout = setTimeout(() => this.saveDraft(), 2000);
+        },
+
+        async saveDraft() {
+          try {
+            this.saveStatus = 'Saving...';
+            this.connectionClass = 'bg-yellow-500 text-white';
+
+            const res = await fetch('/api/faculty/evaluate/' + this.paperId, {
+              method: 'POST',
+              headers: this.authHeaders(),
+              body: JSON.stringify({
+                questionMarks: this.questionMarks.map(q => ({
+                  qNo: q.qNo, maxMarks: q.maxMarks,
+                  marksAwarded: parseFloat(q.marksAwarded) || 0,
+                  comment: q.comment || ''
+                })),
+                status: 'draft',
+                timeTaken: this.elapsedTime
+              })
+            });
+
+            if (res.ok) {
+              this.saveStatus = 'Saved';
+              this.connectionClass = 'bg-green-600 text-white';
+              setTimeout(() => { this.saveStatus = 'Ready'; this.connectionClass = 'bg-gray-600 text-gray-200'; }, 2000);
+            }
+          } catch (e) {
+            this.saveStatus = 'Save failed';
+            this.connectionClass = 'bg-red-600 text-white';
+          }
+        },
+
+        async submitEvaluation() {
+          // Validate
+          const invalid = this.questionMarks.find(q => q.marksAwarded > q.maxMarks);
+          if (invalid) { alert('Q' + invalid.qNo + ' score exceeds max marks (' + invalid.maxMarks + ')'); return; }
+
+          if (!confirm('Submit evaluation? Total: ' + this.totalScore.toFixed(1) + '/' + this.maxTotalMarks.toFixed(1))) return;
+
+          this.saving = true;
+          try {
+            const res = await fetch('/api/faculty/evaluate/' + this.paperId, {
+              method: 'POST',
+              headers: this.authHeaders(),
+              body: JSON.stringify({
+                questionMarks: this.questionMarks.map(q => ({
+                  qNo: q.qNo, maxMarks: q.maxMarks,
+                  marksAwarded: parseFloat(q.marksAwarded) || 0,
+                  comment: q.comment || ''
+                })),
+                status: 'submitted',
+                timeTaken: this.elapsedTime
+              })
+            });
+
+            const d = await res.json();
+            if (!res.ok) throw new Error(d.message);
+
+            this.saveStatus = 'Submitted!';
+            this.connectionClass = 'bg-green-600 text-white';
+            this.existingEvaluation = d.evaluation;
+
+            clearInterval(this.timerInterval);
+            setTimeout(() => window.location.href = '/faculty-dashboard.html', 1500);
+          } catch (e) {
+            alert(e.message);
+          } finally {
+            this.saving = false;
+          }
+        }
+      };
+    }
+
+    // Track page visits
+    document.addEventListener('alpine:init', () => {
+      Alpine.effect(() => {
+        const app = Alpine.$data(document.querySelector('[x-data]'));
+        if (app && app.currentPage) {
+          app.visitedPages.add(app.currentPage);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
