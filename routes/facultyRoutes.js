@@ -24,6 +24,13 @@ router.post('/question-paper',
   fc.upsertQuestionPaper
 );
 router.get('/question-paper/:examId/:subjectId', verifyToken, fc.getQuestionPaper);
+router.post('/generate-rubrics',
+  verifyToken,
+  requireRole('superadmin', 'teacher'),
+  (req, res, next) => { req.uploadType = 'question-papers'; next(); },
+  pdfUpload.fields([{ name: 'questionPaperPdf', maxCount: 1 }]),
+  fc.generateRubrics
+);
 
 // ── Student Paper Upload (admin) ────────────────────────────
 router.post('/student-papers',

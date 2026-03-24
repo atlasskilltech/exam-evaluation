@@ -5,6 +5,7 @@ const FacultyEvaluation = require('../models/FacultyEvaluation');
 const User = require('../models/User');
 const Exam = require('../models/Exam');
 const Subject = require('../models/Subject');
+const path = require('path');
 
 // ── Faculty Management ──────────────────────────────────────
 
@@ -361,6 +362,52 @@ exports.approveEvaluation = async (req, res, next) => {
 };
 
 // ── Faculty Dashboard Stats ─────────────────────────────────
+
+// ── Generate Rubrics from Question Paper PDF ────────────────
+
+exports.generateRubrics = async (req, res, next) => {
+  try {
+    const { examId, subjectId } = req.body;
+
+    // Check if a question paper PDF was uploaded in this request
+    let pdfPath;
+    if (req.files && req.files.questionPaperPdf && req.files.questionPaperPdf[0]) {
+      pdfPath = req.files.questionPaperPdf[0].path;
+    } else {
+      // Try to use an existing uploaded question paper
+      const existing = await QuestionPaper.findOne({ examId, subjectId });
+      if (existing && existing.questionPaperPdf) {
+        // Remove leading slash for fs path
+        pdfPath = existing.questionPaperPdf.replace(/^\//, '');
+      }
+    }
+
+    if (!pdfPath) {
+      return res.status(400).json({ success: false, message: 'No question paper PDF found. Please upload a question paper first.' });
+    }
+
+    const absolutePath = path.isAbsolute(pdfPath) ? pdfPath : path.join(process.cwd(), pdfPath);
+
+    const { generateRubricsFromPdf } = require('../services/aiService');
+    const result = await generateRubricsFromPdf(absolutePath);
+
+    // Map AI response to our question format
+    const questions = result.questions.map((q, idx) => ({
+      qNo: idx + 1,
+      title: q.title || '',
+      maxMarks: q.max_marks || 10,
+      rubric: q.rubric || ''
+    }));
+
+    res.json({
+      success: true,
+      questions,
+      totalMarks: result.total_marks || questions.reduce((s, q) => s + q.maxMarks, 0),
+      paperSummary: result.paper_summary || '',
+      confidence: result.confidence || 0
+    });
+  } catch (err) { next(err); }
+};
 
 exports.getFacultyDashboard = async (req, res, next) => {
   try {
