@@ -352,4 +352,87 @@ async function fullEvaluate(questionPaperPaths, answerSheetPaths, examType = 'de
   };
 }
 
-module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callOpenAIVision, extractAnswerKeyFromPaper, fullEvaluate };
+// ── Generate Rubrics from Question Paper PDF ─────────────────
+function buildRubricGenerationPrompt(pdfText) {
+  return `You are an expert academic question paper analyzer and rubric designer.
+
+You are given the text content extracted from a question paper PDF.
+
+QUESTION PAPER TEXT:
+---
+${pdfText}
+---
+
+INSTRUCTIONS:
+1. Identify ALL questions from the paper (including sub-questions like 1a, 1b - treat each sub-question as a separate entry)
+2. For each question, determine:
+   - The question number (as printed)
+   - A brief title/description of what the question asks
+   - The maximum marks (read from the paper, or estimate based on context)
+   - A detailed rubric/marking criteria that a faculty member should use when evaluating student answers
+3. The rubric should include:
+   - Key points/concepts that must be present for full marks
+   - Partial marking guidelines (e.g., "2 marks for definition, 3 marks for explanation with examples")
+   - Common mistakes to watch for
+4. Be specific and actionable in rubric descriptions
+
+CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code fences. Just raw JSON.
+
+Required JSON format:
+{
+  "questions": [
+    {
+      "q_no": 1,
+      "title": "Brief description of what the question asks",
+      "max_marks": 10,
+      "rubric": "Detailed marking criteria: 2 marks for correct definition, 3 marks for explanation with at least 2 examples, 3 marks for diagram, 2 marks for real-world application. Deduct 1 mark if examples are not relevant."
+    }
+  ],
+  "total_questions": 5,
+  "total_marks": 50,
+  "paper_summary": "Brief summary of the paper topic/subject",
+  "confidence": 0.9
+}`;
+}
+
+async function generateRubricsFromPdf(pdfFilePath) {
+  const pdfParse = require('pdf-parse');
+  const pdfBuffer = fs.readFileSync(pdfFilePath);
+  const pdfData = await pdfParse(pdfBuffer);
+
+  if (!pdfData.text || pdfData.text.trim().length < 20) {
+    throw new Error('Could not extract meaningful text from PDF. The file may be a scanned image. Please enter questions manually or upload a text-based PDF.');
+  }
+
+  // Truncate to avoid token limits (roughly 15k chars)
+  const pdfText = pdfData.text.substring(0, 15000);
+  const prompt = buildRubricGenerationPrompt(pdfText);
+
+  const response = await axios.post(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      model: process.env.OPENAI_MODEL || 'gpt-4o',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }]
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 120000
+    }
+  );
+
+  let rawText = response.data.choices[0].message.content;
+  rawText = rawText.replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(rawText);
+
+  if (!parsed.questions || !Array.isArray(parsed.questions)) {
+    throw new Error('AI returned invalid format: missing questions array');
+  }
+
+  return parsed;
+}
+
+module.exports = { evaluateBatch, prepareImages, buildEvaluationPrompt, callOpenAIVision, extractAnswerKeyFromPaper, fullEvaluate, generateRubricsFromPdf };

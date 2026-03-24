@@ -100,6 +100,33 @@
             </div>
           </div>
 
+          <!-- AI Rubric Generation -->
+          <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200 p-6 mb-6">
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+              </div>
+              <div class="flex-1">
+                <h3 class="text-sm font-semibold text-purple-900 mb-1">AI-Powered Rubric Generation</h3>
+                <p class="text-xs text-purple-700 mb-3">Upload or select a question paper PDF, and AI will automatically extract questions and generate detailed marking rubrics.</p>
+                <div class="flex items-center gap-3">
+                  <button type="button" @click="generateRubrics()"
+                          :disabled="generatingRubrics || (!questionPaperFile && !existingConfig?.questionPaperPdf)"
+                          class="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg x-show="!generatingRubrics" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    <svg x-show="generatingRubrics" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    <span x-text="generatingRubrics ? 'Generating Rubrics...' : 'Generate Rubrics with AI'"></span>
+                  </button>
+                  <span x-show="!questionPaperFile && !existingConfig?.questionPaperPdf" class="text-xs text-purple-500">Upload a question paper PDF first</span>
+                </div>
+                <div x-show="rubricSummary" x-cloak class="mt-3 p-3 bg-white/70 rounded-lg border border-purple-100">
+                  <p class="text-xs text-purple-800"><span class="font-semibold">Paper Summary:</span> <span x-text="rubricSummary"></span></p>
+                  <p class="text-xs text-purple-600 mt-1"><span class="font-semibold">AI Confidence:</span> <span x-text="Math.round((rubricConfidence || 0) * 100) + '%'"></span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Questions & Rubrics -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
             <div class="flex items-center justify-between mb-4">
@@ -163,6 +190,7 @@
     function questionConfig() {
       return {
         sidebarOpen: false, successMsg: '', errorMsg: '', saving: false,
+        generatingRubrics: false, rubricSummary: '', rubricConfidence: 0,
         exams: [], subjects: [],
         selectedExamId: '', selectedSubjectId: '',
         questions: [], questionPaperFile: null, answerKeyFile: null,
@@ -221,6 +249,31 @@
         removeQuestion(idx) {
           this.questions.splice(idx, 1);
           this.questions.forEach((q, i) => q.qNo = i + 1);
+        },
+
+        async generateRubrics() {
+          this.errorMsg = ''; this.successMsg = ''; this.generatingRubrics = true;
+          this.rubricSummary = ''; this.rubricConfidence = 0;
+          try {
+            const formData = new FormData();
+            formData.append('examId', this.selectedExamId);
+            formData.append('subjectId', this.selectedSubjectId);
+            if (this.questionPaperFile) formData.append('questionPaperPdf', this.questionPaperFile);
+
+            const res = await fetch('/api/faculty/generate-rubrics', {
+              method: 'POST',
+              headers: { 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') },
+              body: formData
+            });
+            const d = await res.json();
+            if (!res.ok) throw new Error(d.message);
+
+            this.questions = d.questions || [];
+            this.rubricSummary = d.paperSummary || '';
+            this.rubricConfidence = d.confidence || 0;
+            this.successMsg = `AI generated rubrics for ${this.questions.length} questions (${d.totalMarks} total marks). Review and edit as needed, then save.`;
+          } catch (e) { this.errorMsg = 'Rubric generation failed: ' + e.message; }
+          finally { this.generatingRubrics = false; }
         },
 
         async saveConfig() {
