@@ -423,60 +423,87 @@ CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code 
 
 async function generateRubricsFromPdf(pdfFilePath) {
   const pdfBuffer = fs.readFileSync(pdfFilePath);
-  let pdfText = '';
+  const base64Pdf = pdfBuffer.toString('base64');
 
-  // Try text extraction first
-  try {
-    const pdfParse = require('pdf-parse');
-    const pdfData = await pdfParse(pdfBuffer);
-    if (pdfData.text && pdfData.text.trim().length >= 50) {
-      pdfText = pdfData.text.substring(0, 15000);
-    }
-  } catch (e) { /* text extraction failed, will use vision */ }
+  // Always send the actual PDF file so AI can see the exact layout,
+  // marks column, question numbers, sections, and sub-parts.
+  // Text extraction via pdf-parse loses all layout/formatting which
+  // causes wrong question splitting and marks assignment.
+  const prompt = buildRubricGenerationPrompt('See the attached PDF document. Read it visually — pay close attention to the marks column on the right side of each question.');
 
-  const prompt = buildRubricGenerationPrompt(pdfText || 'See the attached PDF document.');
-
-  let messages;
-  if (pdfText) {
-    // Text-based: send as plain text prompt
-    messages = [{ role: 'user', content: prompt }];
-  } else {
-    // Scanned/image PDF: send PDF as file content to OpenAI
-    const base64Pdf = pdfBuffer.toString('base64');
-    messages = [{
-      role: 'user',
-      content: [
-        {
-          type: 'file',
-          file: {
-            filename: 'question_paper.pdf',
-            file_data: `data:application/pdf;base64,${base64Pdf}`
-          }
-        },
-        { type: 'text', text: prompt }
-      ]
-    }];
-  }
-
-  const response = await axios.post(
-    'https://api.openai.com/v1/chat/completions',
-    {
-      model: process.env.OPENAI_MODEL || 'gpt-4o',
-      max_tokens: 4096,
-      messages
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
+  const messages = [{
+    role: 'user',
+    content: [
+      {
+        type: 'file',
+        file: {
+          filename: 'question_paper.pdf',
+          file_data: `data:application/pdf;base64,${base64Pdf}`
+        }
       },
-      timeout: 180000
+      { type: 'text', text: prompt }
+    ]
+  }];
+
+  const apiCall = async (msgs) => {
+    const res = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: process.env.OPENAI_MODEL || 'gpt-4o',
+        max_tokens: 4096,
+        messages: msgs
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 180000
+      }
+    );
+    return res;
+  };
+
+  let response;
+  try {
+    // Primary: send PDF as file (preserves layout, marks column, structure)
+    response = await apiCall(messages);
+  } catch (primaryErr) {
+    console.error('PDF file upload failed, falling back to text extraction:', primaryErr.response?.data || primaryErr.message);
+
+    // Fallback: extract text and send as plain text
+    let pdfText = '';
+    try {
+      const pdfParse = require('pdf-parse');
+      const pdfData = await pdfParse(pdfBuffer);
+      if (pdfData.text && pdfData.text.trim().length >= 50) {
+        pdfText = pdfData.text.substring(0, 15000);
+      }
+    } catch (e) { /* text extraction also failed */ }
+
+    if (!pdfText) {
+      throw new Error('Could not read the PDF. Please upload a clearer question paper.');
     }
-  );
+
+    const fallbackPrompt = buildRubricGenerationPrompt(pdfText);
+    response = await apiCall([{ role: 'user', content: fallbackPrompt }]);
+  }
 
   let rawText = response.data.choices[0].message.content;
   rawText = rawText.replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(rawText);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (e) {
+    // Try to extract JSON from the response if it has extra text
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error('AI returned invalid JSON. Please try again.');
+    }
+  }
 
   if (!parsed.questions || !Array.isArray(parsed.questions)) {
     throw new Error('AI returned invalid format: missing questions array');
