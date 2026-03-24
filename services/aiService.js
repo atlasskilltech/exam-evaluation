@@ -364,108 +364,146 @@ QUESTION PAPER CONTENT:
 ${pdfText}
 ---
 
-INSTRUCTIONS:
-1. Read the question paper carefully and identify its EXACT structure — sections, question numbers, and sub-parts (a, b, c, etc.)
-2. Preserve the EXACT question numbering as printed on the paper. For example:
-   - If the paper has "Q1 (a)", "Q1 (b)", "Q2 (a)", use q_no: "1a", "1b", "2a" etc.
-   - If the paper has "Section A: Q1, Q2" and "Section B: Q3, Q4", preserve that numbering
-   - If a question has sub-parts, each sub-part must be a SEPARATE entry with its own marks and rubric
-3. For each question/sub-part, determine:
-   - The question number EXACTLY as printed (e.g., "1a", "1b", "2", "3a", "3b", "3c")
-   - A brief title/description of what the question asks
-   - The maximum marks for THAT specific question/sub-part (read from paper)
-   - A detailed rubric/marking criteria for evaluating student answers
-4. The rubric should include:
-   - Key points/concepts that must be present for full marks
-   - Partial marking guidelines (e.g., "2 marks for definition, 3 marks for explanation with examples")
-   - Common mistakes to watch for
-5. Be specific and actionable in rubric descriptions
+CRITICAL RULES — READ VERY CAREFULLY:
+
+1. READ THE MARKS COLUMN: Every question paper has marks printed on the right side. You MUST read and use the EXACT marks printed for each question. Do NOT guess or redistribute marks.
+
+2. FOLLOW THE EXACT PAPER STRUCTURE:
+   - If a question has sub-parts (a, b, c) with SEPARATE marks printed for EACH sub-part → create SEPARATE entries for each sub-part (e.g., "1a", "1b")
+   - If a question has sub-parts (a, b, c) but only ONE total mark is printed for the whole question → create ONE entry for the whole question (e.g., "1")
+   - If a question has NO sub-parts → create ONE entry (e.g., "2")
+   - NEVER split a question into sub-parts if the paper does NOT have sub-parts
+   - NEVER merge sub-parts if they have separate marks printed
+
+3. SECTION HANDLING:
+   - Note any section instructions (e.g., "Answer any 3 out of 5") in the paper_summary
+   - Include ALL questions from ALL sections — even optional ones
+   - Use the question numbers as printed: Q.1, Q.2, Q.3, etc.
+
+4. For each question/sub-part entry, provide:
+   - q_no: The question number exactly as on paper. Use "1a", "1b" for sub-parts, or just "1", "2" for whole questions
+   - title: Brief description of what the question asks
+   - max_marks: The EXACT marks as printed on the paper for this specific question/sub-part
+   - rubric: Detailed marking criteria for evaluating student answers, including:
+     * Key concepts/points needed for full marks
+     * How to distribute partial marks
+     * Common mistakes to watch for
+
+EXAMPLE 1 — Question WITH sub-parts having separate marks:
+Paper shows: Q.1 (case study, 10 marks total)
+  a) Identify challenges... [5 marks]
+  b) Discuss importance... [5 marks]
+→ Output: { "q_no": "1a", "max_marks": 5 }, { "q_no": "1b", "max_marks": 5 }
+
+EXAMPLE 2 — Question WITHOUT sub-parts:
+Paper shows: Q.3 Explain MVP concept... [10 marks]
+→ Output: { "q_no": "3", "max_marks": 10 }
+
+EXAMPLE 3 — Question with sub-parts but SINGLE total mark:
+Paper shows: Q.6 What is MOAT? Choose 2 brands and discuss: a) Air Jordan b) D Mart c) Mama Earth d) Starbucks e) Maggi [10 marks]
+→ Output: { "q_no": "6", "max_marks": 10 }  (the a/b/c/d/e are choices, NOT separate sub-questions)
 
 CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code fences. Just raw JSON.
 
-EXAMPLE - If a paper has: Q1 (a) Define X [5 marks], Q1 (b) Explain Y [5 marks], Q2 Write about Z [10 marks]
-Then output:
-{
-  "questions": [
-    { "q_no": "1a", "title": "Define X", "max_marks": 5, "rubric": "..." },
-    { "q_no": "1b", "title": "Explain Y", "max_marks": 5, "rubric": "..." },
-    { "q_no": "2", "title": "Write about Z", "max_marks": 10, "rubric": "..." }
-  ], ...
-}
-
-Required JSON format:
 {
   "questions": [
     {
       "q_no": "1a",
       "title": "Brief description of what the question asks",
-      "max_marks": 10,
-      "rubric": "Detailed marking criteria: 2 marks for correct definition, 3 marks for explanation with at least 2 examples, 3 marks for diagram, 2 marks for real-world application. Deduct 1 mark if examples are not relevant."
+      "max_marks": 5,
+      "rubric": "Detailed marking criteria..."
     }
   ],
-  "total_questions": 5,
-  "total_marks": 50,
-  "paper_summary": "Brief summary of the paper topic/subject",
+  "total_questions": 7,
+  "total_marks": 40,
+  "paper_summary": "Subject, sections, special instructions (e.g. Section B: answer any 3 out of 5)",
   "confidence": 0.9
 }`;
 }
 
 async function generateRubricsFromPdf(pdfFilePath) {
   const pdfBuffer = fs.readFileSync(pdfFilePath);
-  let pdfText = '';
+  const base64Pdf = pdfBuffer.toString('base64');
 
-  // Try text extraction first
-  try {
-    const pdfParse = require('pdf-parse');
-    const pdfData = await pdfParse(pdfBuffer);
-    if (pdfData.text && pdfData.text.trim().length >= 50) {
-      pdfText = pdfData.text.substring(0, 15000);
-    }
-  } catch (e) { /* text extraction failed, will use vision */ }
+  // Always send the actual PDF file so AI can see the exact layout,
+  // marks column, question numbers, sections, and sub-parts.
+  // Text extraction via pdf-parse loses all layout/formatting which
+  // causes wrong question splitting and marks assignment.
+  const prompt = buildRubricGenerationPrompt('See the attached PDF document. Read it visually — pay close attention to the marks column on the right side of each question.');
 
-  const prompt = buildRubricGenerationPrompt(pdfText || 'See the attached PDF document.');
-
-  let messages;
-  if (pdfText) {
-    // Text-based: send as plain text prompt
-    messages = [{ role: 'user', content: prompt }];
-  } else {
-    // Scanned/image PDF: send PDF as file content to OpenAI
-    const base64Pdf = pdfBuffer.toString('base64');
-    messages = [{
-      role: 'user',
-      content: [
-        {
-          type: 'file',
-          file: {
-            filename: 'question_paper.pdf',
-            file_data: `data:application/pdf;base64,${base64Pdf}`
-          }
-        },
-        { type: 'text', text: prompt }
-      ]
-    }];
-  }
-
-  const response = await axios.post(
-    'https://api.openai.com/v1/chat/completions',
-    {
-      model: process.env.OPENAI_MODEL || 'gpt-4o',
-      max_tokens: 4096,
-      messages
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
+  const messages = [{
+    role: 'user',
+    content: [
+      {
+        type: 'file',
+        file: {
+          filename: 'question_paper.pdf',
+          file_data: `data:application/pdf;base64,${base64Pdf}`
+        }
       },
-      timeout: 180000
+      { type: 'text', text: prompt }
+    ]
+  }];
+
+  const apiCall = async (msgs) => {
+    const res = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: process.env.OPENAI_MODEL || 'gpt-4o',
+        max_tokens: 4096,
+        messages: msgs
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 180000
+      }
+    );
+    return res;
+  };
+
+  let response;
+  try {
+    // Primary: send PDF as file (preserves layout, marks column, structure)
+    response = await apiCall(messages);
+  } catch (primaryErr) {
+    console.error('PDF file upload failed, falling back to text extraction:', primaryErr.response?.data || primaryErr.message);
+
+    // Fallback: extract text and send as plain text
+    let pdfText = '';
+    try {
+      const pdfParse = require('pdf-parse');
+      const pdfData = await pdfParse(pdfBuffer);
+      if (pdfData.text && pdfData.text.trim().length >= 50) {
+        pdfText = pdfData.text.substring(0, 15000);
+      }
+    } catch (e) { /* text extraction also failed */ }
+
+    if (!pdfText) {
+      throw new Error('Could not read the PDF. Please upload a clearer question paper.');
     }
-  );
+
+    const fallbackPrompt = buildRubricGenerationPrompt(pdfText);
+    response = await apiCall([{ role: 'user', content: fallbackPrompt }]);
+  }
 
   let rawText = response.data.choices[0].message.content;
   rawText = rawText.replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(rawText);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (e) {
+    // Try to extract JSON from the response if it has extra text
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error('AI returned invalid JSON. Please try again.');
+    }
+  }
 
   if (!parsed.questions || !Array.isArray(parsed.questions)) {
     throw new Error('AI returned invalid format: missing questions array');
