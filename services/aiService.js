@@ -396,9 +396,9 @@ Required JSON format:
 }
 
 async function generateRubricsFromPdf(pdfFilePath) {
-  const { PDFParse } = require('pdf-parse');
+  const pdfParse = require('pdf-parse');
   const pdfBuffer = fs.readFileSync(pdfFilePath);
-  const pdfData = await PDFParse(pdfBuffer);
+  const pdfData = await pdfParse(pdfBuffer);
 
   if (!pdfData.text || pdfData.text.trim().length < 20) {
     throw new Error('Could not extract meaningful text from PDF. The file may be a scanned image. Please enter questions manually or upload a text-based PDF.');
