@@ -364,48 +364,59 @@ QUESTION PAPER CONTENT:
 ${pdfText}
 ---
 
-INSTRUCTIONS:
-1. Read the question paper carefully and identify its EXACT structure — sections, question numbers, and sub-parts (a, b, c, etc.)
-2. Preserve the EXACT question numbering as printed on the paper. For example:
-   - If the paper has "Q1 (a)", "Q1 (b)", "Q2 (a)", use q_no: "1a", "1b", "2a" etc.
-   - If the paper has "Section A: Q1, Q2" and "Section B: Q3, Q4", preserve that numbering
-   - If a question has sub-parts, each sub-part must be a SEPARATE entry with its own marks and rubric
-3. For each question/sub-part, determine:
-   - The question number EXACTLY as printed (e.g., "1a", "1b", "2", "3a", "3b", "3c")
-   - A brief title/description of what the question asks
-   - The maximum marks for THAT specific question/sub-part (read from paper)
-   - A detailed rubric/marking criteria for evaluating student answers
-4. The rubric should include:
-   - Key points/concepts that must be present for full marks
-   - Partial marking guidelines (e.g., "2 marks for definition, 3 marks for explanation with examples")
-   - Common mistakes to watch for
-5. Be specific and actionable in rubric descriptions
+CRITICAL RULES — READ VERY CAREFULLY:
+
+1. READ THE MARKS COLUMN: Every question paper has marks printed on the right side. You MUST read and use the EXACT marks printed for each question. Do NOT guess or redistribute marks.
+
+2. FOLLOW THE EXACT PAPER STRUCTURE:
+   - If a question has sub-parts (a, b, c) with SEPARATE marks printed for EACH sub-part → create SEPARATE entries for each sub-part (e.g., "1a", "1b")
+   - If a question has sub-parts (a, b, c) but only ONE total mark is printed for the whole question → create ONE entry for the whole question (e.g., "1")
+   - If a question has NO sub-parts → create ONE entry (e.g., "2")
+   - NEVER split a question into sub-parts if the paper does NOT have sub-parts
+   - NEVER merge sub-parts if they have separate marks printed
+
+3. SECTION HANDLING:
+   - Note any section instructions (e.g., "Answer any 3 out of 5") in the paper_summary
+   - Include ALL questions from ALL sections — even optional ones
+   - Use the question numbers as printed: Q.1, Q.2, Q.3, etc.
+
+4. For each question/sub-part entry, provide:
+   - q_no: The question number exactly as on paper. Use "1a", "1b" for sub-parts, or just "1", "2" for whole questions
+   - title: Brief description of what the question asks
+   - max_marks: The EXACT marks as printed on the paper for this specific question/sub-part
+   - rubric: Detailed marking criteria for evaluating student answers, including:
+     * Key concepts/points needed for full marks
+     * How to distribute partial marks
+     * Common mistakes to watch for
+
+EXAMPLE 1 — Question WITH sub-parts having separate marks:
+Paper shows: Q.1 (case study, 10 marks total)
+  a) Identify challenges... [5 marks]
+  b) Discuss importance... [5 marks]
+→ Output: { "q_no": "1a", "max_marks": 5 }, { "q_no": "1b", "max_marks": 5 }
+
+EXAMPLE 2 — Question WITHOUT sub-parts:
+Paper shows: Q.3 Explain MVP concept... [10 marks]
+→ Output: { "q_no": "3", "max_marks": 10 }
+
+EXAMPLE 3 — Question with sub-parts but SINGLE total mark:
+Paper shows: Q.6 What is MOAT? Choose 2 brands and discuss: a) Air Jordan b) D Mart c) Mama Earth d) Starbucks e) Maggi [10 marks]
+→ Output: { "q_no": "6", "max_marks": 10 }  (the a/b/c/d/e are choices, NOT separate sub-questions)
 
 CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code fences. Just raw JSON.
 
-EXAMPLE - If a paper has: Q1 (a) Define X [5 marks], Q1 (b) Explain Y [5 marks], Q2 Write about Z [10 marks]
-Then output:
-{
-  "questions": [
-    { "q_no": "1a", "title": "Define X", "max_marks": 5, "rubric": "..." },
-    { "q_no": "1b", "title": "Explain Y", "max_marks": 5, "rubric": "..." },
-    { "q_no": "2", "title": "Write about Z", "max_marks": 10, "rubric": "..." }
-  ], ...
-}
-
-Required JSON format:
 {
   "questions": [
     {
       "q_no": "1a",
       "title": "Brief description of what the question asks",
-      "max_marks": 10,
-      "rubric": "Detailed marking criteria: 2 marks for correct definition, 3 marks for explanation with at least 2 examples, 3 marks for diagram, 2 marks for real-world application. Deduct 1 mark if examples are not relevant."
+      "max_marks": 5,
+      "rubric": "Detailed marking criteria..."
     }
   ],
-  "total_questions": 5,
-  "total_marks": 50,
-  "paper_summary": "Brief summary of the paper topic/subject",
+  "total_questions": 7,
+  "total_marks": 40,
+  "paper_summary": "Subject, sections, special instructions (e.g. Section B: answer any 3 out of 5)",
   "confidence": 0.9
 }`;
 }
