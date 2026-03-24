@@ -255,8 +255,8 @@
                     <template x-for="(row, idx) in answerKey" :key="idx">
                       <tr class="hover:bg-gray-50">
                         <td class="px-5 py-2">
-                          <input type="number" x-model.number="row.qNo" min="1"
-                                 class="w-16 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                          <input type="text" x-model="row.qNo"
+                                 class="w-16 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" placeholder="1a">
                         </td>
                         <td class="px-5 py-2">
                           <input type="text" x-model="row.correctAnswer"
@@ -447,7 +447,7 @@
             const data = await res.json();
             const keys = data.answerKey || data.data || data || [];
             this.answerKey = Array.isArray(keys) ? keys.map(k => ({
-              qNo: k.qNo || k.questionNumber || 0,
+              qNo: String(k.qNo || k.questionNumber || ''),
               correctAnswer: k.correctAnswer || k.answer || '',
               maxMarks: k.maxMarks || k.marks || 0,
               acceptedVariants: Array.isArray(k.acceptedVariants) ? k.acceptedVariants.join(', ') : (k.acceptedVariants || '')
@@ -458,9 +458,7 @@
         },
 
         addAnswerRow() {
-          const nextQ = this.answerKey.length > 0
-            ? Math.max(...this.answerKey.map(r => r.qNo || 0)) + 1
-            : 1;
+          const nextQ = String(this.answerKey.length + 1);
           this.answerKey.push({
             qNo: nextQ,
             correctAnswer: '',

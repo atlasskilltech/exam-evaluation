@@ -43,8 +43,8 @@ ${answerKey.questions.map(q =>
 
 INSTRUCTIONS:
 1. Carefully read ALL provided images in the order given (they are pages of ONE answer sheet)
-2. Identify each question number written by the student
-3. Extract the student's handwritten answer for each question accurately
+2. Identify each question number written by the student — including sub-parts (e.g., 1a, 1b, 2a, 2b). Use the EXACT q_no from the answer key above.
+3. Extract the student's handwritten answer for each question/sub-question accurately
 4. For MCQ type: Award full marks if answer matches correctAnswer OR any acceptedVariants (case-insensitive trim comparison)
 5. For Descriptive type: Award partial marks proportional to keyword coverage, concept accuracy, and relevance
 6. For Mixed type: Apply MCQ rules to MCQ questions and descriptive rules to descriptive questions
@@ -58,7 +58,7 @@ Required JSON format:
 {
   "student_answers": [
     {
-      "q_no": 1,
+      "q_no": "1a",
       "student_answer": "B",
       "correct_answer": "B",
       "marks_awarded": 1,
@@ -113,7 +113,7 @@ async function storeEvaluation(batchId, aiResult, exam, batch, gradingScale) {
   const passFail = aiResult.total_marks_obtained >= exam.passingMarks ? 'pass' : 'fail';
 
   const questionBreakdown = aiResult.student_answers.map(sa => ({
-    qNo: sa.q_no,
+    qNo: String(sa.q_no || '').replace(/^Q\.?\s*/i, '').trim(),
     studentAnswer: sa.student_answer,
     correctAnswer: sa.correct_answer,
     marksAwarded: sa.marks_awarded,
@@ -209,12 +209,13 @@ Default marks per question: ${marksPerQuestion}
 
 INSTRUCTIONS:
 1. Carefully read ALL provided images in order (they are pages of ONE question paper)
-2. Identify each question number, the question text, and the correct answer
-3. For MCQ: Extract the correct option (A/B/C/D or the answer text)
-4. For Descriptive: Extract the model/expected answer or key points
-5. For each question, determine the marks (use the value printed on the paper, or default to ${marksPerQuestion})
-6. Include common accepted variants of the answer (alternate spellings, abbreviations, etc.)
-7. If a question is not clearly visible, still include it with your best reading and lower confidence
+2. Identify the EXACT structure of the paper — sections, question numbers, and sub-parts (a, b, c, etc.)
+3. Preserve the EXACT question numbering as printed. If Q1 has parts (a) and (b), create separate entries with q_no "1a", "1b"
+4. For MCQ: Extract the correct option (A/B/C/D or the answer text)
+5. For Descriptive: Extract the model/expected answer or key points
+6. For each question/sub-part, determine the marks (use the value printed on the paper, or default to ${marksPerQuestion})
+7. Include common accepted variants of the answer (alternate spellings, abbreviations, etc.)
+8. If a question is not clearly visible, still include it with your best reading and lower confidence
 
 CRITICAL: Return ONLY a valid JSON object. No markdown. No explanation. No code fences. Just raw JSON.
 
@@ -222,7 +223,7 @@ Required JSON format:
 {
   "questions": [
     {
-      "q_no": 1,
+      "q_no": "1a",
       "question_text": "What is the capital of France?",
       "correct_answer": "Paris",
       "max_marks": ${marksPerQuestion},
@@ -288,8 +289,8 @@ ${extractedQuestions.map(q =>
 
 INSTRUCTIONS:
 1. Carefully read ALL provided images in the order given (they are pages of ONE student's answer sheet)
-2. Identify each question number written by the student
-3. Extract the student's handwritten answer for each question accurately
+2. Identify each question number and sub-part written by the student. Use the EXACT q_no from the answer key above (e.g., "1a", "1b", "2a").
+3. Extract the student's handwritten answer for each question/sub-question accurately
 4. For MCQ type: Award full marks if answer matches correctAnswer OR any acceptedVariants (case-insensitive trim comparison)
 5. For Descriptive type: Award partial marks proportional to keyword coverage, concept accuracy, relevance, and depth of explanation. Be fair and generous — if the student demonstrates understanding of the core concepts, award proportional marks even if wording differs from the model answer.
 6. For Mixed type: Apply MCQ rules to MCQ questions and descriptive rules to descriptive questions
@@ -303,7 +304,7 @@ Required JSON format:
 {
   "student_answers": [
     {
-      "q_no": 1,
+      "q_no": "1a",
       "question_text": "Brief question text",
       "student_answer": "The student's actual written answer (summarized if very long)",
       "correct_answer": "Expected answer",

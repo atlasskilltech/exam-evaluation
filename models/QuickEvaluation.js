@@ -14,7 +14,7 @@ const quickEvaluationSchema = new mongoose.Schema({
 
   // AI-extracted data
   extractedQuestions: [{
-    qNo:              { type: Number },
+    qNo:              { type: String },
     questionText:     { type: String },
     correctAnswer:    { type: String },
     maxMarks:         { type: Number },
@@ -24,7 +24,7 @@ const quickEvaluationSchema = new mongoose.Schema({
 
   // Evaluation result
   questionBreakdown: [{
-    qNo:           { type: Number },
+    qNo:           { type: String },
     questionText:  { type: String },
     studentAnswer: { type: String },
     correctAnswer: { type: String },
