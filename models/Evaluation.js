@@ -7,7 +7,7 @@ const evaluationSchema = new mongoose.Schema({
   subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
   aiResponseRaw: { type: mongoose.Schema.Types.Mixed },
   questionBreakdown: [{
-    qNo:           { type: Number },
+    qNo:           { type: String },
     studentAnswer: { type: String },
     correctAnswer: { type: String },
     marksAwarded:  { type: Number },

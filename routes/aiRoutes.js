@@ -133,7 +133,7 @@ router.post('/extract-answer-key/:subjectId', verifyToken, requireRole('superadm
 
         // Convert AI result to AnswerKey format
         const questions = aiResult.questions.map(q => ({
-          qNo: q.q_no,
+          qNo: String(q.q_no || '').replace(/^Q\.?\s*/i, '').trim(),
           correctAnswer: q.correct_answer,
           maxMarks: q.max_marks || subject.marksPerQuestion,
           acceptedVariants: q.accepted_variants || []
@@ -291,16 +291,15 @@ router.post('/full-evaluate',
 
           const result = await fullEvaluate(qpPaths, asPaths, examType || 'descriptive');
 
-          // Helper: extract numeric part from q_no (handles "Q.1", "Q1", "1", 1)
+          // Helper: normalize q_no to string (handles "Q.1", "Q1", "1a", 1)
           const parseQNo = (val) => {
-            if (typeof val === 'number') return val;
-            const num = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
-            return isNaN(num) ? 0 : num;
+            if (val == null) return '';
+            return String(val).replace(/^Q\.?\s*/i, '').trim();
           };
 
           // Store extracted questions
           quickEval.extractedQuestions = result.extractedQuestions.map((q, i) => ({
-            qNo: parseQNo(q.q_no) || (i + 1),
+            qNo: parseQNo(q.q_no) || String(i + 1),
             questionText: q.question_text,
             correctAnswer: q.correct_answer,
             maxMarks: parseFloat(q.max_marks) || 0,
@@ -311,7 +310,7 @@ router.post('/full-evaluate',
           // Store evaluation breakdown
           const evaluation = result.evaluation;
           quickEval.questionBreakdown = evaluation.student_answers.map((sa, i) => ({
-            qNo: parseQNo(sa.q_no) || (i + 1),
+            qNo: parseQNo(sa.q_no) || String(i + 1),
             questionText: sa.question_text || '',
             studentAnswer: sa.student_answer,
             correctAnswer: sa.correct_answer,

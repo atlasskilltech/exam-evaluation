@@ -169,7 +169,7 @@ exports.importAnswerKey = async (filePath, subjectId) => {
         rowNum++;
         try {
           const q = {
-            qNo: parseInt(row.qNo),
+            qNo: String(row.qNo || '').trim(),
             correctAnswer: row.correctAnswer,
             maxMarks: parseFloat(row.maxMarks),
             acceptedVariants: row.acceptedVariants ? row.acceptedVariants.split('|').map(v => v.trim()) : []

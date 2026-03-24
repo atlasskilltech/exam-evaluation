@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const manualOverrideSchema = new mongoose.Schema({
   evaluationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Evaluation' },
-  qNo:           { type: Number },
+  qNo:           { type: String },
   originalMarks: { type: Number },
   newMarks:      { type: Number },
   overriddenBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
