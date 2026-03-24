@@ -356,9 +356,9 @@ async function fullEvaluate(questionPaperPaths, answerSheetPaths, examType = 'de
 function buildRubricGenerationPrompt(pdfText) {
   return `You are an expert academic question paper analyzer and rubric designer.
 
-You are given the text content extracted from a question paper PDF.
+You are given a question paper (either as extracted text or as an attached PDF image). Analyze it carefully.
 
-QUESTION PAPER TEXT:
+QUESTION PAPER CONTENT:
 ---
 ${pdfText}
 ---
@@ -396,31 +396,55 @@ Required JSON format:
 }
 
 async function generateRubricsFromPdf(pdfFilePath) {
-  const pdfParse = require('pdf-parse');
   const pdfBuffer = fs.readFileSync(pdfFilePath);
-  const pdfData = await pdfParse(pdfBuffer);
+  let pdfText = '';
 
-  if (!pdfData.text || pdfData.text.trim().length < 20) {
-    throw new Error('Could not extract meaningful text from PDF. The file may be a scanned image. Please enter questions manually or upload a text-based PDF.');
+  // Try text extraction first
+  try {
+    const pdfParse = require('pdf-parse');
+    const pdfData = await pdfParse(pdfBuffer);
+    if (pdfData.text && pdfData.text.trim().length >= 50) {
+      pdfText = pdfData.text.substring(0, 15000);
+    }
+  } catch (e) { /* text extraction failed, will use vision */ }
+
+  const prompt = buildRubricGenerationPrompt(pdfText || 'See the attached PDF document.');
+
+  let messages;
+  if (pdfText) {
+    // Text-based: send as plain text prompt
+    messages = [{ role: 'user', content: prompt }];
+  } else {
+    // Scanned/image PDF: send as base64 to Vision API
+    const base64Pdf = pdfBuffer.toString('base64');
+    messages = [{
+      role: 'user',
+      content: [
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:application/pdf;base64,${base64Pdf}`,
+            detail: 'high'
+          }
+        },
+        { type: 'text', text: prompt }
+      ]
+    }];
   }
-
-  // Truncate to avoid token limits (roughly 15k chars)
-  const pdfText = pdfData.text.substring(0, 15000);
-  const prompt = buildRubricGenerationPrompt(pdfText);
 
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
       model: process.env.OPENAI_MODEL || 'gpt-4o',
       max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }]
+      messages
     },
     {
       headers: {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      timeout: 120000
+      timeout: 180000
     }
   );
 
