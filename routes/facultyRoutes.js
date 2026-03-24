@@ -15,7 +15,7 @@ router.delete('/mapping/:id', verifyToken, requireRole('superadmin', 'teacher'),
 // ── Question Paper Config (admin) ───────────────────────────
 router.post('/question-paper',
   verifyToken,
-  requireRole('superadmin', 'teacher'),
+  requireRole('superadmin', 'teacher', 'faculty'),
   (req, res, next) => { req.uploadType = 'question-papers'; next(); },
   pdfUpload.fields([
     { name: 'questionPaperPdf', maxCount: 1 },
@@ -26,7 +26,7 @@ router.post('/question-paper',
 router.get('/question-paper/:examId/:subjectId', verifyToken, fc.getQuestionPaper);
 router.post('/generate-rubrics',
   verifyToken,
-  requireRole('superadmin', 'teacher'),
+  requireRole('superadmin', 'teacher', 'faculty'),
   (req, res, next) => { req.uploadType = 'question-papers'; next(); },
   pdfUpload.fields([{ name: 'questionPaperPdf', maxCount: 1 }]),
   fc.generateRubrics
