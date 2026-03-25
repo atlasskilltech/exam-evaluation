@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Evaluate Answer Sheet - Faculty Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
@@ -339,7 +339,7 @@
 
   <script>
     // Configure PDF.js worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
     function evaluateApp() {
       return {
@@ -559,26 +559,31 @@
         // FILE LOADING (PDF or Image)
         // =====================
         async loadFile() {
-          try {
-            // First, detect actual file type via HEAD request
-            const headRes = await fetch(this.pdfUrl, { method: 'HEAD' }).catch(() => null);
-            const contentType = headRes?.headers?.get('content-type') || '';
+          // Check file extension first
+          const url = this.pdfUrl.toLowerCase();
+          const isImageExt = url.match(/\.(jpg|jpeg|png|gif|bmp|webp)(\?|$)/);
 
-            if (contentType.includes('image/') || !this.isPdf) {
-              // It's an image file
+          if (isImageExt || !this.isPdf) {
+            this.isPdf = false;
+            this.loadImage();
+            return;
+          }
+
+          // Try HEAD request to detect content-type
+          try {
+            const headRes = await fetch(this.pdfUrl, { method: 'HEAD' });
+            const contentType = headRes.headers.get('content-type') || '';
+            if (contentType.includes('image/')) {
               this.isPdf = false;
               this.loadImage();
               return;
             }
-
-            // Try loading as PDF
-            await this.loadPdf();
-          } catch (err) {
-            console.error('File load error:', err);
-            // Final fallback: try as image
-            this.isPdf = false;
-            this.loadImage();
+          } catch (e) {
+            // HEAD failed, proceed with PDF attempt
           }
+
+          // Try loading as PDF, with fallback
+          await this.loadPdf();
         },
 
         async loadPdf() {
@@ -588,7 +593,7 @@
             this.totalPages = this.pdfDoc.numPages;
             await this.renderPage(this.currentPage);
           } catch (err) {
-            console.warn('PDF.js could not load file, falling back to image mode:', err.message);
+            console.warn('PDF.js failed, trying image fallback:', err.message || err);
             this.isPdf = false;
             this.pdfDoc = null;
             this.loadImage();
@@ -607,7 +612,6 @@
 
           try {
             if (this.isPdf && this.pdfDoc) {
-              // PDF mode: render the specific page
               const page = await this.pdfDoc.getPage(pageNum);
               const viewport = page.getViewport({ scale: 1.5 });
 
@@ -619,18 +623,20 @@
               ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
               await page.render({ canvasContext: ctx, viewport }).promise;
 
-              // Resize fabric canvas to match
-              this.fabricCanvas.setWidth(viewport.width);
-              this.fabricCanvas.setHeight(viewport.height);
+              if (this.fabricCanvas) {
+                this.fabricCanvas.setWidth(viewport.width);
+                this.fabricCanvas.setHeight(viewport.height);
+              }
             } else {
-              // Image mode: reload the image (for single page)
               await this.loadImageToCanvas();
             }
 
-            // Load annotations for this page
             this.loadPageAnnotation(pageNum);
           } catch (err) {
             console.error('Render error:', err);
+            // If PDF render fails, fall back to iframe
+            this.useIframeFallback = true;
+            this.canvasReady = true;
           } finally {
             this.renderingPage = false;
           }
@@ -666,8 +672,7 @@
               resolve();
             };
             img.onerror = () => {
-              console.error('Failed to load image:', this.pdfUrl);
-              // Try using iframe as last resort
+              console.warn('Image load failed, using iframe fallback');
               this.useIframeFallback = true;
               this.canvasReady = true;
               resolve();
