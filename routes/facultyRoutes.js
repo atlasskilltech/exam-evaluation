@@ -51,6 +51,7 @@ router.get('/evaluate/:paperId', verifyToken, requireRole('faculty'), fc.getEval
 router.post('/evaluate/:paperId', verifyToken, requireRole('faculty'), fc.saveEvaluation);
 router.get('/page-image/:paperId/:pageNum', verifyToken, fc.getPageImage);
 router.get('/page-count/:paperId', verifyToken, fc.getPageCount);
+router.get('/annotated-evaluation/:evalId', verifyToken, fc.getAnnotatedEvaluation);
 router.get('/evaluations/:examId', verifyToken, fc.getEvaluationsByExam);
 router.post('/approve/:evalId', verifyToken, requireRole('superadmin', 'teacher'), fc.approveEvaluation);
 
