@@ -5,33 +5,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Evaluate Answer Sheet - Faculty Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
-    .pdf-container { height: calc(100vh - 140px); }
+    .pdf-container { height: calc(100vh - 100px); }
     .score-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .score-input { -moz-appearance: textfield; }
+
+    /* Toolbar styles */
+    .tool-btn { transition: all 0.15s; }
+    .tool-btn:hover { background: rgba(255,255,255,0.1); }
+    .tool-btn.active { background: rgba(20,184,166,0.3); box-shadow: inset 0 0 0 2px #14b8a6; }
+    .tool-btn svg { pointer-events: none; }
+
+    /* Canvas wrapper */
+    .canvas-wrap { position: relative; display: inline-block; }
+    .canvas-wrap canvas { display: block; }
+
+    /* Flip/rotate transforms */
+    .viewer-transform { transition: transform 0.3s ease; transform-origin: center center; }
+
+    /* Color picker */
+    .color-dot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; }
+    .color-dot:hover, .color-dot.active { border-color: white; transform: scale(1.2); }
+
+    /* Scrollbar */
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
   </style>
 </head>
 <body class="bg-gray-900 min-h-screen" x-data="evaluateApp()" x-init="init()">
 
   <!-- Top Bar -->
-  <header class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between z-50 relative">
-    <div class="flex items-center gap-4">
-      <a href="/faculty-dashboard.html" class="text-gray-400 hover:text-white transition">
+  <header class="bg-gray-800/95 backdrop-blur border-b border-gray-700 px-4 py-2 flex items-center justify-between z-50 relative">
+    <div class="flex items-center gap-3">
+      <a href="/faculty-dashboard.html" class="text-gray-400 hover:text-white transition p-1 rounded hover:bg-gray-700">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
       </a>
-      <span class="text-white font-semibold">Back</span>
+      <div class="h-4 w-px bg-gray-600"></div>
+      <span class="text-white font-semibold text-sm">Evaluate</span>
     </div>
-    <div class="flex items-center gap-3 text-sm">
-      <span class="text-gray-400">ID: <span class="text-white font-mono" x-text="paper?.rollNo || paper?._id?.slice(-6) || '-'"></span></span>
-      <span class="text-gray-600">|</span>
-      <span class="text-gray-400">Subject: <span class="text-cyan-400 font-medium" x-text="paper?.subjectId?.name || '-'"></span></span>
-      <span class="text-gray-600">|</span>
-      <span class="text-gray-400">Time: <span class="text-white font-mono" x-text="formatTime(elapsedTime)"></span></span>
+    <div class="flex items-center gap-4 text-xs">
+      <div class="flex items-center gap-1.5 bg-gray-700/50 px-2.5 py-1 rounded-full">
+        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <span class="text-white font-mono" x-text="paper?.rollNo || '-'"></span>
+      </div>
+      <div class="flex items-center gap-1.5 bg-gray-700/50 px-2.5 py-1 rounded-full">
+        <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        <span class="text-cyan-400 font-medium" x-text="paper?.subjectId?.name || '-'"></span>
+      </div>
+      <div class="flex items-center gap-1.5 bg-gray-700/50 px-2.5 py-1 rounded-full">
+        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="text-white font-mono" x-text="formatTime(elapsedTime)"></span>
+      </div>
     </div>
     <div class="flex items-center gap-2">
-      <span class="text-xs px-2 py-1 rounded" :class="connectionClass" x-text="saveStatus"></span>
+      <span class="text-xs px-2.5 py-1 rounded-full font-medium" :class="connectionClass" x-text="saveStatus"></span>
+      <div class="bg-gray-700/50 px-2.5 py-1 rounded-full text-xs font-bold"
+           :class="totalScore > 0 ? 'text-teal-400' : 'text-gray-400'"
+           x-text="'Total: ' + totalScore.toFixed(1) + '/' + maxTotalMarks.toFixed(1)"></div>
     </div>
   </header>
 
@@ -49,40 +84,133 @@
     <!-- Left: Page Navigation -->
     <div class="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-2 gap-1 overflow-y-auto">
       <template x-for="n in totalPages" :key="n">
-        <button @click="currentPage = n"
-                :class="currentPage === n ? 'bg-teal-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
-                class="w-8 h-8 rounded-lg text-xs font-medium flex items-center justify-center transition"
+        <button @click="currentPage = n; renderPage(n)"
+                :class="currentPage === n ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' : (visitedPages.has(n) ? 'bg-gray-600 text-gray-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')"
+                class="w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition"
                 x-text="n"></button>
       </template>
     </div>
 
-    <!-- Left: PDF/Image Viewer -->
+    <!-- Center: PDF/Image Viewer with Annotations -->
     <div class="flex-1 bg-gray-900 relative overflow-hidden flex flex-col">
-      <!-- Zoom controls -->
-      <div class="absolute top-3 right-3 z-10 flex items-center gap-1 bg-gray-800/90 rounded-lg px-2 py-1">
-        <button @click="zoom = Math.max(0.5, zoom - 0.1)" class="text-gray-400 hover:text-white p-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
-        </button>
-        <span class="text-xs text-gray-300 w-10 text-center" x-text="Math.round(zoom * 100) + '%'"></span>
-        <button @click="zoom = Math.min(3, zoom + 0.1)" class="text-gray-400 hover:text-white p-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        </button>
-      </div>
 
-      <!-- Page info -->
-      <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-gray-800/90 rounded-lg px-3 py-1 text-xs text-gray-300">
-        Page <span x-text="currentPage"></span> of <span x-text="totalPages"></span>
-      </div>
-
-      <!-- PDF viewer area -->
-      <div class="flex-1 overflow-auto flex items-start justify-center p-4 pdf-container">
-        <div x-show="pdfUrl" class="transition-transform" :style="'transform: scale(' + zoom + '); transform-origin: top center;'">
-          <!-- For PDF files, use iframe -->
-          <iframe x-show="isPdf" :src="pdfUrl + '#page=' + currentPage" class="w-[800px] h-[1100px] bg-white rounded shadow-lg"></iframe>
-          <!-- For image files -->
-          <img x-show="!isPdf" :src="pdfUrl" class="max-w-full rounded shadow-lg" alt="Answer Sheet">
+      <!-- Annotation Toolbar -->
+      <div class="bg-gray-800 border-b border-gray-700 px-3 py-1.5 flex items-center justify-between">
+        <!-- Left: Annotation Tools -->
+        <div class="flex items-center gap-1">
+          <!-- Select/Move -->
+          <button @click="setTool('select')" :class="activeTool === 'select' ? 'active' : ''" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Select (V)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+          </button>
+          <div class="w-px h-5 bg-gray-600 mx-1"></div>
+          <!-- Pen/Draw -->
+          <button @click="setTool('pen')" :class="activeTool === 'pen' ? 'active' : ''" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Pen (P)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+          </button>
+          <!-- Highlighter -->
+          <button @click="setTool('highlight')" :class="activeTool === 'highlight' ? 'active' : ''" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Highlight (H)">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M4 19h16v2H4zm12.7-13.3c-.4-.4-1-.4-1.4 0L9 12l-1-1-3 3 2 2 1 1 3-3-1-1 6.3-6.3c.4-.4.4-1 0-1.4l-1.6-1.6z"/></svg>
+          </button>
+          <!-- Text -->
+          <button @click="setTool('text')" :class="activeTool === 'text' ? 'active' : ''" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Text (T)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+          <!-- Line -->
+          <button @click="setTool('line')" :class="activeTool === 'line' ? 'active' : ''" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Line (L)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 20L20 4"/></svg>
+          </button>
+          <!-- Rectangle -->
+          <button @click="setTool('rect')" :class="activeTool === 'rect' ? 'active' : ''" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Rectangle (R)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/></svg>
+          </button>
+          <!-- Check mark -->
+          <button @click="addCheckMark()" class="tool-btn p-1.5 rounded-lg text-green-400" title="Check Mark">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+          </button>
+          <!-- Cross mark -->
+          <button @click="addCrossMark()" class="tool-btn p-1.5 rounded-lg text-red-400" title="Cross Mark">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+          <!-- Eraser -->
+          <button @click="setTool('eraser')" :class="activeTool === 'eraser' ? 'active' : ''" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Eraser (E)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+          <div class="w-px h-5 bg-gray-600 mx-1"></div>
+          <!-- Undo -->
+          <button @click="undoAnnotation()" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Undo (Ctrl+Z)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a5 5 0 015 5v2M3 10l4-4m-4 4l4 4"/></svg>
+          </button>
+          <!-- Redo -->
+          <button @click="redoAnnotation()" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Redo (Ctrl+Y)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a5 5 0 00-5 5v2m15-7l-4-4m4 4l-4 4"/></svg>
+          </button>
+          <!-- Clear All -->
+          <button @click="clearAnnotations()" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Clear All">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          </button>
         </div>
-        <div x-show="!pdfUrl" class="text-gray-500 text-center py-20">
+
+        <!-- Center: Colors & Brush Size -->
+        <div class="flex items-center gap-2">
+          <template x-for="c in annotationColors" :key="c">
+            <button @click="penColor = c" class="color-dot" :class="penColor === c ? 'active' : ''" :style="'background:' + c"></button>
+          </template>
+          <div class="w-px h-5 bg-gray-600 mx-1"></div>
+          <span class="text-[10px] text-gray-400">Size</span>
+          <input type="range" min="1" max="20" x-model.number="brushSize" @input="updateBrushSize()" class="w-16 h-1 accent-teal-500">
+          <span class="text-[10px] text-gray-300 w-4" x-text="brushSize"></span>
+        </div>
+
+        <!-- Right: View Controls (Flip/Rotate/Zoom) -->
+        <div class="flex items-center gap-1">
+          <!-- Rotate Left -->
+          <button @click="rotateView(-90)" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Rotate Left">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0115.59-6.04M20 15a9 9 0 01-15.59 6.04"/></svg>
+          </button>
+          <!-- Rotate Right -->
+          <button @click="rotateView(90)" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Rotate Right">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 4v5h-5M4 20v-5h5M20 9a9 9 0 00-15.59-6.04M4 15a9 9 0 0015.59 6.04"/></svg>
+          </button>
+          <!-- Flip Horizontal -->
+          <button @click="flipView('h')" class="tool-btn p-1.5 rounded-lg text-gray-300" :class="flipH ? 'active' : ''" title="Flip Horizontal">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21l-4-4 4-4M17 21l4-4-4-4M12 3v18M3 17h18"/></svg>
+          </button>
+          <!-- Flip Vertical -->
+          <button @click="flipView('v')" class="tool-btn p-1.5 rounded-lg text-gray-300" :class="flipV ? 'active' : ''" title="Flip Vertical">
+            <svg class="w-4 h-4 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21l-4-4 4-4M17 21l4-4-4-4M12 3v18M3 17h18"/></svg>
+          </button>
+          <!-- Reset View -->
+          <button @click="resetView()" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Reset View">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 4v5h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+          <div class="w-px h-5 bg-gray-600 mx-1"></div>
+          <!-- Zoom -->
+          <button @click="zoom = Math.max(0.5, zoom - 0.1)" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Zoom Out">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"/></svg>
+          </button>
+          <span class="text-xs text-gray-300 w-10 text-center font-mono" x-text="Math.round(zoom * 100) + '%'"></span>
+          <button @click="zoom = Math.min(3, zoom + 0.1)" class="tool-btn p-1.5 rounded-lg text-gray-300" title="Zoom In">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Page info overlay -->
+      <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-gray-800/90 rounded-full px-4 py-1.5 text-xs text-gray-300 backdrop-blur">
+        Page <span class="text-white font-bold" x-text="currentPage"></span> of <span x-text="totalPages"></span>
+        <span class="ml-2 text-gray-500" x-text="'| Rot: ' + rotation + '°'"></span>
+      </div>
+
+      <!-- Canvas viewer area -->
+      <div class="flex-1 overflow-auto flex items-start justify-center p-4 pdf-container" id="viewerScroll">
+        <div x-show="pdfUrl || canvasReady" class="viewer-transform"
+             :style="'transform: scale(' + zoom + ') rotate(' + rotation + 'deg) scaleX(' + (flipH ? -1 : 1) + ') scaleY(' + (flipV ? -1 : 1) + '); transform-origin: top center;'">
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="pdfCanvas"></canvas>
+            <canvas id="fabricCanvas" style="position:absolute; top:0; left:0;"></canvas>
+          </div>
+        </div>
+        <div x-show="!pdfUrl && !canvasReady" class="text-gray-500 text-center py-20">
           <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           <p>No answer sheet loaded</p>
         </div>
@@ -90,42 +218,42 @@
     </div>
 
     <!-- Right: Evaluation Panel -->
-    <div class="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+    <div class="w-80 bg-gray-900 border-l border-gray-700 flex flex-col overflow-hidden">
       <!-- Student Info -->
-      <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+      <div class="px-4 py-3 bg-gray-800 border-b border-gray-700">
         <div class="flex items-center justify-between">
           <div>
-            <p class="font-semibold text-gray-900 text-sm" x-text="paper?.studentName || 'Student'"></p>
-            <p class="text-xs text-gray-500" x-text="'Roll: ' + (paper?.rollNo || '-')"></p>
+            <p class="font-semibold text-white text-sm" x-text="paper?.studentName || 'Student'"></p>
+            <p class="text-xs text-gray-400" x-text="'Roll: ' + (paper?.rollNo || '-')"></p>
           </div>
-          <div class="text-right">
-            <p class="text-xs text-gray-500">Total Score</p>
-            <p class="text-lg font-bold" :class="totalScore > 0 ? 'text-teal-600' : 'text-gray-400'"
+          <div class="text-right bg-gray-700/50 px-3 py-1.5 rounded-lg">
+            <p class="text-[10px] text-gray-400 uppercase tracking-wide">Score</p>
+            <p class="text-lg font-bold" :class="totalScore > 0 ? 'text-teal-400' : 'text-gray-500'"
                x-text="totalScore.toFixed(1) + ' / ' + maxTotalMarks.toFixed(1)"></p>
           </div>
         </div>
       </div>
 
       <!-- Questions Header -->
-      <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex text-xs font-medium text-gray-500">
-        <span class="w-16">Question</span>
-        <span class="flex-1 text-center">Out of</span>
+      <div class="px-4 py-2 bg-gray-800/50 border-b border-gray-700 flex text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+        <span class="w-14">Q.No</span>
+        <span class="flex-1 text-center">Max</span>
         <span class="w-20 text-center">Score</span>
       </div>
 
       <!-- Questions List -->
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto custom-scroll">
         <template x-for="(q, idx) in questionMarks" :key="idx">
-          <div class="px-4 py-2.5 border-b border-gray-100 flex items-center hover:bg-gray-50 transition"
-               :class="activeQuestion === idx ? 'bg-teal-50 border-l-4 border-l-teal-500' : ''"
+          <div class="px-3 py-2 border-b border-gray-800 flex items-center hover:bg-gray-800/50 transition cursor-pointer"
+               :class="activeQuestion === idx ? 'bg-teal-900/30 border-l-2 border-l-teal-500' : 'border-l-2 border-l-transparent'"
                @click="activeQuestion = idx">
-            <!-- Question number button -->
-            <button class="w-10 h-10 rounded-lg text-sm font-semibold flex items-center justify-center flex-shrink-0 transition"
-                    :class="q.marksAwarded > 0 ? 'bg-green-100 text-green-700' : (q.marksAwarded === 0 && q.touched ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600')"
-                    x-text="'Q' + q.qNo"></button>
+            <!-- Question number badge -->
+            <button class="w-9 h-9 rounded-lg text-xs font-bold flex items-center justify-center flex-shrink-0 transition"
+                    :class="q.marksAwarded > 0 ? 'bg-green-500/20 text-green-400 ring-1 ring-green-500/30' : (q.marksAwarded === 0 && q.touched ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/30' : 'bg-gray-700 text-gray-400')"
+                    x-text="q.qNo"></button>
 
             <!-- Out of marks -->
-            <span class="flex-1 text-center text-sm text-gray-600" x-text="q.maxMarks"></span>
+            <span class="flex-1 text-center text-sm text-gray-500" x-text="q.maxMarks"></span>
 
             <!-- Score input -->
             <div class="w-20 flex-shrink-0">
@@ -133,8 +261,8 @@
                      x-model.number="q.marksAwarded"
                      @input="q.touched = true; autoSave()"
                      @focus="activeQuestion = idx"
-                     class="score-input w-full text-center px-2 py-1.5 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition"
-                     :class="q.marksAwarded > q.maxMarks ? 'border-red-300 bg-red-50' : 'border-gray-300'"
+                     class="score-input w-full text-center px-2 py-1.5 border rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition bg-gray-800 text-white"
+                     :class="q.marksAwarded > q.maxMarks ? 'border-red-500 bg-red-900/30' : 'border-gray-600'"
                      :disabled="isReadOnly">
             </div>
           </div>
@@ -143,70 +271,72 @@
 
       <!-- Active Question Detail -->
       <div x-show="activeQuestion !== null && questionPaper?.questions?.[activeQuestion]" x-cloak
-           class="px-4 py-3 bg-blue-50 border-t border-blue-200 max-h-32 overflow-y-auto">
-        <p class="text-xs font-semibold text-blue-800 mb-1" x-text="'Q' + (activeQuestion + 1) + ':'"></p>
-        <p class="text-xs text-blue-700" x-text="questionPaper?.questions?.[activeQuestion]?.title || 'No title'"></p>
-        <p x-show="questionPaper?.questions?.[activeQuestion]?.rubric" class="text-xs text-blue-600 mt-1 italic"
+           class="px-4 py-3 bg-blue-900/20 border-t border-blue-800/30 max-h-28 overflow-y-auto custom-scroll">
+        <p class="text-xs font-semibold text-blue-400 mb-1" x-text="'Q' + questionMarks[activeQuestion]?.qNo + ':'"></p>
+        <p class="text-xs text-blue-300/80" x-text="questionPaper?.questions?.[activeQuestion]?.title || 'No title'"></p>
+        <p x-show="questionPaper?.questions?.[activeQuestion]?.rubric" class="text-xs text-blue-400/60 mt-1 italic"
            x-text="'Rubric: ' + (questionPaper?.questions?.[activeQuestion]?.rubric || '')"></p>
       </div>
 
       <!-- Comment for active question -->
-      <div x-show="activeQuestion !== null" x-cloak class="px-4 py-2 border-t border-gray-200">
+      <div x-show="activeQuestion !== null" x-cloak class="px-4 py-2 border-t border-gray-700">
         <textarea x-model="questionMarks[activeQuestion]?.comment" @input="autoSave()" rows="2"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+                  class="w-full px-3 py-2 border border-gray-600 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 outline-none resize-none bg-gray-800 text-gray-200 placeholder-gray-500"
                   placeholder="Add comment for this question..." :disabled="isReadOnly"></textarea>
       </div>
 
       <!-- Action Buttons -->
-      <div class="px-4 py-3 bg-gray-50 border-t border-gray-200 space-y-2">
+      <div class="px-4 py-3 bg-gray-800 border-t border-gray-700 space-y-2">
         <!-- Calculate Total -->
         <button @click="calculateTotal()"
-                class="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2">
+                class="w-full bg-teal-600 hover:bg-teal-500 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-teal-600/20">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-          Calculate Total Score : <span x-text="totalScore.toFixed(1) + ' / ' + maxTotalMarks.toFixed(1)"></span>
+          Total: <span x-text="totalScore.toFixed(1) + ' / ' + maxTotalMarks.toFixed(1)"></span>
         </button>
 
         <div class="grid grid-cols-2 gap-2" x-show="!isReadOnly">
-          <!-- Reset -->
           <button @click="resetPaper()"
-                  class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition">
-            Reset Paper
+                  class="bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 px-4 rounded-lg text-sm transition">
+            Reset
           </button>
-          <!-- Submit -->
           <button @click="submitEvaluation()" :disabled="saving"
-                  class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition disabled:opacity-60">
+                  class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition disabled:opacity-60 shadow-lg shadow-indigo-600/20">
             <span x-text="saving ? 'Saving...' : 'Submit'"></span>
           </button>
         </div>
 
-        <div x-show="isReadOnly" class="text-center text-sm text-gray-500 py-1">
-          This evaluation is <span class="font-medium" x-text="existingEvaluation?.status || 'read-only'"></span>
+        <div x-show="isReadOnly" class="text-center text-xs text-gray-500 py-1">
+          Evaluation is <span class="font-medium text-yellow-400" x-text="existingEvaluation?.status || 'read-only'"></span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Total Pages info at bottom -->
+  <!-- Bottom Page Strip -->
   <div x-show="!pageLoading && paper" x-cloak
-       class="fixed bottom-0 left-12 right-80 bg-gray-800 border-t border-gray-700 px-4 py-1.5 flex items-center justify-between z-40">
-    <div class="flex items-center gap-4 text-xs text-gray-400">
-      <span>Total Pages: <span class="text-white" x-text="totalPages"></span></span>
-      <span>Visited: <span class="text-green-400" x-text="visitedPages.size"></span></span>
-      <span>Not Visited: <span class="text-red-400" x-text="totalPages - visitedPages.size"></span></span>
+       class="fixed bottom-0 left-12 right-80 bg-gray-800/95 backdrop-blur border-t border-gray-700 px-4 py-1.5 flex items-center justify-between z-40">
+    <div class="flex items-center gap-3 text-[10px] text-gray-400">
+      <span>Pages: <span class="text-white font-bold" x-text="totalPages"></span></span>
+      <span class="text-green-400"><span x-text="visitedPages.size"></span> visited</span>
+      <span class="text-red-400"><span x-text="totalPages - visitedPages.size"></span> remaining</span>
     </div>
     <div class="flex items-center gap-1">
       <template x-for="n in totalPages" :key="'p'+n">
-        <button @click="currentPage = n"
-                :class="visitedPages.has(n) ? 'bg-green-500' : 'bg-red-500'"
-                class="w-5 h-5 rounded text-[10px] text-white font-medium flex items-center justify-center"
+        <button @click="currentPage = n; renderPage(n)"
+                :class="currentPage === n ? 'bg-teal-500 ring-1 ring-teal-300' : (visitedPages.has(n) ? 'bg-green-600' : 'bg-gray-600')"
+                class="w-5 h-5 rounded text-[10px] text-white font-bold flex items-center justify-center hover:scale-110 transition"
                 x-text="n"></button>
       </template>
     </div>
   </div>
 
   <script>
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
     function evaluateApp() {
       return {
+        // --- Core State ---
         pageLoading: true,
         paperId: '',
         paper: null,
@@ -220,6 +350,7 @@
         zoom: 1,
         pdfUrl: '',
         isPdf: true,
+        canvasReady: false,
         elapsedTime: 0,
         timerInterval: null,
         saveStatus: 'Ready',
@@ -227,6 +358,26 @@
         saving: false,
         autoSaveTimeout: null,
 
+        // --- Annotation State ---
+        activeTool: 'select',
+        penColor: '#FF0000',
+        brushSize: 3,
+        annotationColors: ['#FF0000', '#00CC00', '#0066FF', '#FF9900', '#FFFF00', '#FF00FF', '#FFFFFF', '#000000'],
+        fabricCanvas: null,
+        pageAnnotations: {},  // { pageNum: fabricJSON }
+        undoStack: [],
+        redoStack: [],
+
+        // --- Flip/Rotate State ---
+        rotation: 0,
+        flipH: false,
+        flipV: false,
+
+        // --- PDF.js State ---
+        pdfDoc: null,
+        renderingPage: false,
+
+        // --- Computed ---
         get totalScore() {
           return this.questionMarks.reduce((s, q) => s + (parseFloat(q.marksAwarded) || 0), 0);
         },
@@ -241,6 +392,9 @@
           return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') };
         },
 
+        // =====================
+        // INITIALIZATION
+        // =====================
         async init() {
           const token = localStorage.getItem('auth_token');
           if (!token) { window.location.href = '/faculty-login.html'; return; }
@@ -272,7 +426,6 @@
                 qNo: q.qNo, maxMarks: q.maxMarks, marksAwarded: 0, comment: '', touched: false
               }));
             } else {
-              // Default 5 questions
               for (let i = 1; i <= 5; i++) {
                 this.questionMarks.push({ qNo: i, maxMarks: 10, marksAwarded: 0, comment: '', touched: false });
               }
@@ -280,8 +433,28 @@
 
             this.totalPages = this.paper?.totalPages || 10;
 
+            // Load saved annotations
+            if (this.existingEvaluation?.annotations) {
+              this.pageAnnotations = this.existingEvaluation.annotations;
+            }
+
             // Start timer
             this.startTimer();
+
+            // Init canvas after DOM ready
+            this.$nextTick(() => {
+              this.initFabricCanvas();
+              if (this.pdfUrl) {
+                if (this.isPdf) {
+                  this.loadPdf();
+                } else {
+                  this.loadImage();
+                }
+              }
+            });
+
+            // Keyboard shortcuts
+            this.initKeyboardShortcuts();
           } catch (err) {
             console.error(err);
             alert('Error loading evaluation data');
@@ -290,6 +463,368 @@
           }
         },
 
+        // =====================
+        // FABRIC.JS CANVAS
+        // =====================
+        initFabricCanvas() {
+          const fc = document.getElementById('fabricCanvas');
+          this.fabricCanvas = new fabric.Canvas(fc, {
+            isDrawingMode: false,
+            selection: true,
+            preserveObjectStacking: true,
+          });
+
+          // Save annotation on every object change
+          this.fabricCanvas.on('object:added', () => this.savePageAnnotation());
+          this.fabricCanvas.on('object:modified', () => this.savePageAnnotation());
+          this.fabricCanvas.on('object:removed', () => this.savePageAnnotation());
+
+          // Text tool: add text on click
+          this.fabricCanvas.on('mouse:down', (opt) => {
+            if (this.activeTool === 'text' && !opt.target) {
+              const pointer = this.fabricCanvas.getPointer(opt.e);
+              const text = new fabric.IText('Type here', {
+                left: pointer.x,
+                top: pointer.y,
+                fontSize: 16,
+                fill: this.penColor,
+                fontFamily: 'Arial',
+                fontWeight: 'bold',
+              });
+              this.fabricCanvas.add(text);
+              this.fabricCanvas.setActiveObject(text);
+              text.enterEditing();
+              this.pushUndo();
+            }
+          });
+
+          // Line / Rectangle drawing
+          let drawStart = null;
+          let drawObj = null;
+
+          this.fabricCanvas.on('mouse:down', (opt) => {
+            if (this.activeTool === 'line' || this.activeTool === 'rect') {
+              const p = this.fabricCanvas.getPointer(opt.e);
+              drawStart = { x: p.x, y: p.y };
+
+              if (this.activeTool === 'line') {
+                drawObj = new fabric.Line([p.x, p.y, p.x, p.y], {
+                  stroke: this.penColor,
+                  strokeWidth: this.brushSize,
+                  selectable: true,
+                });
+              } else {
+                drawObj = new fabric.Rect({
+                  left: p.x, top: p.y, width: 0, height: 0,
+                  stroke: this.penColor,
+                  strokeWidth: this.brushSize,
+                  fill: 'transparent',
+                  selectable: true,
+                });
+              }
+              this.fabricCanvas.add(drawObj);
+            }
+          });
+
+          this.fabricCanvas.on('mouse:move', (opt) => {
+            if (!drawStart || !drawObj) return;
+            const p = this.fabricCanvas.getPointer(opt.e);
+            if (this.activeTool === 'line') {
+              drawObj.set({ x2: p.x, y2: p.y });
+            } else if (this.activeTool === 'rect') {
+              const left = Math.min(drawStart.x, p.x);
+              const top = Math.min(drawStart.y, p.y);
+              drawObj.set({ left, top, width: Math.abs(p.x - drawStart.x), height: Math.abs(p.y - drawStart.y) });
+            }
+            this.fabricCanvas.renderAll();
+          });
+
+          this.fabricCanvas.on('mouse:up', () => {
+            if (drawStart && drawObj) {
+              this.pushUndo();
+              drawStart = null;
+              drawObj = null;
+            }
+          });
+
+          this.canvasReady = true;
+        },
+
+        // =====================
+        // PDF.JS RENDERING
+        // =====================
+        async loadPdf() {
+          try {
+            this.pdfDoc = await pdfjsLib.getDocument(this.pdfUrl).promise;
+            this.totalPages = this.pdfDoc.numPages;
+            await this.renderPage(this.currentPage);
+          } catch (err) {
+            console.error('PDF load error:', err);
+            // Fallback: try as image
+            this.isPdf = false;
+            this.loadImage();
+          }
+        },
+
+        async renderPage(pageNum) {
+          if (this.renderingPage) return;
+          if (!this.pdfDoc && this.isPdf) return;
+
+          this.renderingPage = true;
+          this.currentPage = pageNum;
+          this.visitedPages.add(pageNum);
+
+          // Save current page annotations before switching
+          this.savePageAnnotation();
+
+          try {
+            if (this.isPdf && this.pdfDoc) {
+              const page = await this.pdfDoc.getPage(pageNum);
+              const viewport = page.getViewport({ scale: 1.5 });
+
+              const pdfCanvas = document.getElementById('pdfCanvas');
+              pdfCanvas.width = viewport.width;
+              pdfCanvas.height = viewport.height;
+
+              const ctx = pdfCanvas.getContext('2d');
+              await page.render({ canvasContext: ctx, viewport }).promise;
+
+              // Resize fabric canvas to match
+              this.fabricCanvas.setWidth(viewport.width);
+              this.fabricCanvas.setHeight(viewport.height);
+            }
+
+            // Load annotations for this page
+            this.loadPageAnnotation(pageNum);
+          } catch (err) {
+            console.error('Render error:', err);
+          } finally {
+            this.renderingPage = false;
+          }
+        },
+
+        loadImage() {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const pdfCanvas = document.getElementById('pdfCanvas');
+            const maxW = 800;
+            const scale = img.width > maxW ? maxW / img.width : 1;
+            pdfCanvas.width = img.width * scale;
+            pdfCanvas.height = img.height * scale;
+
+            const ctx = pdfCanvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, pdfCanvas.width, pdfCanvas.height);
+
+            this.fabricCanvas.setWidth(pdfCanvas.width);
+            this.fabricCanvas.setHeight(pdfCanvas.height);
+
+            this.loadPageAnnotation(1);
+            this.canvasReady = true;
+          };
+          img.src = this.pdfUrl;
+        },
+
+        // =====================
+        // ANNOTATION TOOLS
+        // =====================
+        setTool(tool) {
+          this.activeTool = tool;
+          if (!this.fabricCanvas) return;
+
+          // Reset state
+          this.fabricCanvas.isDrawingMode = false;
+          this.fabricCanvas.selection = true;
+          this.fabricCanvas.defaultCursor = 'default';
+          this.fabricCanvas.hoverCursor = 'move';
+
+          if (tool === 'pen') {
+            this.fabricCanvas.isDrawingMode = true;
+            this.fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(this.fabricCanvas);
+            this.fabricCanvas.freeDrawingBrush.color = this.penColor;
+            this.fabricCanvas.freeDrawingBrush.width = this.brushSize;
+          } else if (tool === 'highlight') {
+            this.fabricCanvas.isDrawingMode = true;
+            this.fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(this.fabricCanvas);
+            this.fabricCanvas.freeDrawingBrush.color = this.penColor + '55'; // Semi-transparent
+            this.fabricCanvas.freeDrawingBrush.width = this.brushSize * 5;
+          } else if (tool === 'eraser') {
+            this.fabricCanvas.selection = false;
+            this.fabricCanvas.defaultCursor = 'crosshair';
+            this.fabricCanvas.hoverCursor = 'crosshair';
+            // Click to delete object
+            this.fabricCanvas.on('mouse:down', (opt) => {
+              if (this.activeTool === 'eraser' && opt.target) {
+                this.pushUndo();
+                this.fabricCanvas.remove(opt.target);
+              }
+            });
+          } else if (tool === 'text') {
+            this.fabricCanvas.defaultCursor = 'text';
+            this.fabricCanvas.hoverCursor = 'text';
+          } else if (tool === 'line' || tool === 'rect') {
+            this.fabricCanvas.selection = false;
+            this.fabricCanvas.defaultCursor = 'crosshair';
+          }
+        },
+
+        updateBrushSize() {
+          if (this.fabricCanvas?.freeDrawingBrush) {
+            this.fabricCanvas.freeDrawingBrush.width = this.activeTool === 'highlight' ? this.brushSize * 5 : this.brushSize;
+          }
+        },
+
+        addCheckMark() {
+          if (!this.fabricCanvas) return;
+          const center = this.fabricCanvas.getCenter();
+          const check = new fabric.Text('\u2713', {
+            left: center.left, top: center.top,
+            fontSize: 40, fill: '#22c55e',
+            fontFamily: 'Arial', fontWeight: 'bold',
+            originX: 'center', originY: 'center',
+          });
+          this.fabricCanvas.add(check);
+          this.fabricCanvas.setActiveObject(check);
+          this.pushUndo();
+        },
+
+        addCrossMark() {
+          if (!this.fabricCanvas) return;
+          const center = this.fabricCanvas.getCenter();
+          const cross = new fabric.Text('\u2717', {
+            left: center.left, top: center.top,
+            fontSize: 40, fill: '#ef4444',
+            fontFamily: 'Arial', fontWeight: 'bold',
+            originX: 'center', originY: 'center',
+          });
+          this.fabricCanvas.add(cross);
+          this.fabricCanvas.setActiveObject(cross);
+          this.pushUndo();
+        },
+
+        // =====================
+        // ANNOTATION PERSISTENCE (per page)
+        // =====================
+        savePageAnnotation() {
+          if (!this.fabricCanvas) return;
+          const json = this.fabricCanvas.toJSON();
+          if (json.objects.length > 0) {
+            this.pageAnnotations[this.currentPage] = json;
+          } else {
+            delete this.pageAnnotations[this.currentPage];
+          }
+        },
+
+        loadPageAnnotation(pageNum) {
+          if (!this.fabricCanvas) return;
+          this.fabricCanvas.clear();
+          const saved = this.pageAnnotations[pageNum];
+          if (saved) {
+            this.fabricCanvas.loadFromJSON(saved, () => {
+              this.fabricCanvas.renderAll();
+            });
+          }
+        },
+
+        // =====================
+        // UNDO / REDO
+        // =====================
+        pushUndo() {
+          if (!this.fabricCanvas) return;
+          this.undoStack.push(JSON.stringify(this.fabricCanvas.toJSON()));
+          this.redoStack = [];
+          if (this.undoStack.length > 30) this.undoStack.shift();
+        },
+
+        undoAnnotation() {
+          if (!this.fabricCanvas || this.undoStack.length === 0) return;
+          this.redoStack.push(JSON.stringify(this.fabricCanvas.toJSON()));
+          const prev = this.undoStack.pop();
+          this.fabricCanvas.loadFromJSON(prev, () => this.fabricCanvas.renderAll());
+        },
+
+        redoAnnotation() {
+          if (!this.fabricCanvas || this.redoStack.length === 0) return;
+          this.undoStack.push(JSON.stringify(this.fabricCanvas.toJSON()));
+          const next = this.redoStack.pop();
+          this.fabricCanvas.loadFromJSON(next, () => this.fabricCanvas.renderAll());
+        },
+
+        clearAnnotations() {
+          if (!this.fabricCanvas) return;
+          if (!confirm('Clear all annotations on this page?')) return;
+          this.pushUndo();
+          this.fabricCanvas.clear();
+          this.savePageAnnotation();
+        },
+
+        // =====================
+        // FLIP / ROTATE
+        // =====================
+        rotateView(deg) {
+          this.rotation = (this.rotation + deg + 360) % 360;
+        },
+
+        flipView(axis) {
+          if (axis === 'h') this.flipH = !this.flipH;
+          if (axis === 'v') this.flipV = !this.flipV;
+        },
+
+        resetView() {
+          this.rotation = 0;
+          this.flipH = false;
+          this.flipV = false;
+          this.zoom = 1;
+        },
+
+        // =====================
+        // KEYBOARD SHORTCUTS
+        // =====================
+        initKeyboardShortcuts() {
+          document.addEventListener('keydown', (e) => {
+            // Don't trigger when typing in inputs
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            switch (e.key.toLowerCase()) {
+              case 'v': this.setTool('select'); break;
+              case 'p': this.setTool('pen'); break;
+              case 'h': this.setTool('highlight'); break;
+              case 't': this.setTool('text'); break;
+              case 'l': this.setTool('line'); break;
+              case 'r': this.setTool('rect'); break;
+              case 'e': this.setTool('eraser'); break;
+              case 'z':
+                if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.undoAnnotation(); }
+                break;
+              case 'y':
+                if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.redoAnnotation(); }
+                break;
+              case 'delete':
+              case 'backspace':
+                if (this.fabricCanvas?.getActiveObject()) {
+                  this.pushUndo();
+                  this.fabricCanvas.remove(this.fabricCanvas.getActiveObject());
+                }
+                break;
+              case 'arrowleft':
+                if (this.currentPage > 1) { this.currentPage--; this.renderPage(this.currentPage); }
+                break;
+              case 'arrowright':
+                if (this.currentPage < this.totalPages) { this.currentPage++; this.renderPage(this.currentPage); }
+                break;
+              case '=': case '+':
+                if (e.ctrlKey) { e.preventDefault(); this.zoom = Math.min(3, this.zoom + 0.1); }
+                break;
+              case '-':
+                if (e.ctrlKey) { e.preventDefault(); this.zoom = Math.max(0.5, this.zoom - 0.1); }
+                break;
+            }
+          });
+        },
+
+        // =====================
+        // TIMER / UTILS
+        // =====================
         startTimer() {
           this.elapsedTime = this.existingEvaluation?.timeTaken || 0;
           this.timerInterval = setInterval(() => { this.elapsedTime++; }, 1000);
@@ -303,7 +838,6 @@
         },
 
         calculateTotal() {
-          // Force recalculate (computed property already handles this)
           this.saveStatus = 'Total: ' + this.totalScore.toFixed(1) + '/' + this.maxTotalMarks.toFixed(1);
           this.connectionClass = 'bg-teal-600 text-white';
         },
@@ -315,6 +849,9 @@
           this.connectionClass = 'bg-yellow-500 text-white';
         },
 
+        // =====================
+        // AUTO-SAVE & SUBMIT
+        // =====================
         autoSave() {
           clearTimeout(this.autoSaveTimeout);
           this.autoSaveTimeout = setTimeout(() => this.saveDraft(), 2000);
@@ -324,6 +861,9 @@
           try {
             this.saveStatus = 'Saving...';
             this.connectionClass = 'bg-yellow-500 text-white';
+
+            // Save current page annotations before sending
+            this.savePageAnnotation();
 
             const res = await fetch('/api/faculty/evaluate/' + this.paperId, {
               method: 'POST',
@@ -335,7 +875,8 @@
                   comment: q.comment || ''
                 })),
                 status: 'draft',
-                timeTaken: this.elapsedTime
+                timeTaken: this.elapsedTime,
+                annotations: this.pageAnnotations
               })
             });
 
@@ -351,13 +892,14 @@
         },
 
         async submitEvaluation() {
-          // Validate
           const invalid = this.questionMarks.find(q => q.marksAwarded > q.maxMarks);
           if (invalid) { alert('Q' + invalid.qNo + ' score exceeds max marks (' + invalid.maxMarks + ')'); return; }
 
           if (!confirm('Submit evaluation? Total: ' + this.totalScore.toFixed(1) + '/' + this.maxTotalMarks.toFixed(1))) return;
 
           this.saving = true;
+          this.savePageAnnotation();
+
           try {
             const res = await fetch('/api/faculty/evaluate/' + this.paperId, {
               method: 'POST',
@@ -369,7 +911,8 @@
                   comment: q.comment || ''
                 })),
                 status: 'submitted',
-                timeTaken: this.elapsedTime
+                timeTaken: this.elapsedTime,
+                annotations: this.pageAnnotations
               })
             });
 
