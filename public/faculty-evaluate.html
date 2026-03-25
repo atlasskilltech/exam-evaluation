@@ -23,6 +23,10 @@
     .canvas-wrap { position: relative; display: inline-block; }
     .canvas-wrap canvas { display: block; }
 
+    /* Make Fabric.js upper-canvas transparent background */
+    .canvas-container { background: transparent !important; }
+    .canvas-container .upper-canvas { background: transparent !important; }
+
     /* Flip/rotate transforms */
     .viewer-transform { transition: transform 0.3s ease; transform-origin: center center; }
 
@@ -202,18 +206,16 @@
 
       <!-- Viewer area -->
       <div class="flex-1 overflow-auto flex items-start justify-center p-4 pdf-container" id="viewerScroll">
-        <!-- PDF: iframe with flip/rotate wrapper -->
-        <div x-show="pdfUrl && isPdf" class="viewer-transform"
+        <div x-show="pdfUrl" class="viewer-transform"
              :style="'transform: scale(' + zoom + ') rotate(' + rotation + 'deg) scaleX(' + (flipH ? -1 : 1) + ') scaleY(' + (flipV ? -1 : 1) + '); transform-origin: top center;'">
-          <iframe :src="pdfUrl + '#page=' + currentPage"
-                  class="w-[800px] h-[1100px] bg-white rounded shadow-lg border-0"></iframe>
-        </div>
-        <!-- Image: canvas with annotation overlay -->
-        <div x-show="pdfUrl && !isPdf" class="viewer-transform"
-             :style="'transform: scale(' + zoom + ') rotate(' + rotation + 'deg) scaleX(' + (flipH ? -1 : 1) + ') scaleY(' + (flipV ? -1 : 1) + '); transform-origin: top center;'">
-          <div class="canvas-wrap" id="canvasWrap">
-            <canvas id="pdfCanvas"></canvas>
-            <canvas id="fabricCanvas" style="position:absolute; top:0; left:0;"></canvas>
+          <div class="relative" id="canvasWrap" :style="isPdf ? 'width:800px;height:1100px' : ''">
+            <!-- PDF: iframe as background -->
+            <iframe x-show="isPdf" :src="pdfUrl + '#page=' + currentPage"
+                    class="w-full h-full bg-white rounded shadow-lg border-0" style="position:absolute;top:0;left:0;z-index:1;"></iframe>
+            <!-- Image: canvas as background -->
+            <canvas x-show="!isPdf" id="pdfCanvas" style="position:absolute;top:0;left:0;z-index:1;"></canvas>
+            <!-- Annotation layer on top of both -->
+            <canvas id="fabricCanvas" :style="'position:relative; z-index:' + (activeTool === 'select' && isPdf ? '0' : '2') + ';'"></canvas>
           </div>
         </div>
         <!-- No file loaded -->
@@ -447,9 +449,7 @@
 
             // Init canvas and load file after DOM ready
             this.$nextTick(() => {
-              if (!this.isPdf) {
-                this.initFabricCanvas();
-              }
+              this.initFabricCanvas();
               if (this.pdfUrl) {
                 this.loadFile();
               }
@@ -557,8 +557,14 @@
         // =====================
         loadFile() {
           if (this.isPdf) {
-            // PDFs use iframe — no canvas needed, flip/rotate still works via CSS
+            // PDF: size the annotation canvas to match the iframe
+            if (this.fabricCanvas) {
+              this.fabricCanvas.setWidth(800);
+              this.fabricCanvas.setHeight(1100);
+              this.fabricCanvas.renderAll();
+            }
             this.canvasReady = true;
+            this.loadPageAnnotation(this.currentPage);
           } else {
             // Images use canvas with Fabric.js annotations
             this.loadImageToCanvas();
@@ -566,15 +572,18 @@
         },
 
         renderPage(pageNum) {
+          // Save current page annotations before switching
+          this.savePageAnnotation();
+
           this.currentPage = pageNum;
           this.visitedPages.add(pageNum);
 
           if (!this.isPdf) {
-            // For images, save current annotations then reload
-            this.savePageAnnotation();
             this.loadImageToCanvas();
+          } else {
+            // For PDFs, iframe updates via :src binding, just load annotations
+            this.loadPageAnnotation(pageNum);
           }
-          // For PDFs, iframe updates automatically via :src binding
         },
 
         loadImageToCanvas() {
