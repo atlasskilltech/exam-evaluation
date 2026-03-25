@@ -203,13 +203,20 @@
 
       <!-- Canvas viewer area -->
       <div class="flex-1 overflow-auto flex items-start justify-center p-4 pdf-container" id="viewerScroll">
-        <div x-show="pdfUrl || canvasReady" class="viewer-transform"
+        <!-- Canvas-based viewer (PDF.js + Fabric.js) -->
+        <div x-show="(pdfUrl || canvasReady) && !useIframeFallback" class="viewer-transform"
              :style="'transform: scale(' + zoom + ') rotate(' + rotation + 'deg) scaleX(' + (flipH ? -1 : 1) + ') scaleY(' + (flipV ? -1 : 1) + '); transform-origin: top center;'">
           <div class="canvas-wrap" id="canvasWrap">
             <canvas id="pdfCanvas"></canvas>
             <canvas id="fabricCanvas" style="position:absolute; top:0; left:0;"></canvas>
           </div>
         </div>
+        <!-- Iframe fallback for files that can't be rendered on canvas -->
+        <div x-show="useIframeFallback" class="viewer-transform"
+             :style="'transform: scale(' + zoom + ') rotate(' + rotation + 'deg) scaleX(' + (flipH ? -1 : 1) + ') scaleY(' + (flipV ? -1 : 1) + '); transform-origin: top center;'">
+          <iframe :src="pdfUrl + '#page=' + currentPage" class="w-[800px] h-[1100px] bg-white rounded shadow-lg"></iframe>
+        </div>
+        <!-- No file loaded -->
         <div x-show="!pdfUrl && !canvasReady" class="text-gray-500 text-center py-20">
           <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           <p>No answer sheet loaded</p>
@@ -376,6 +383,7 @@
         // --- PDF.js State ---
         pdfDoc: null,
         renderingPage: false,
+        useIframeFallback: false,
 
         // --- Computed ---
         get totalScore() {
@@ -412,10 +420,11 @@
             this.questionPaper = data.questionPaper;
             this.existingEvaluation = data.evaluation;
 
-            // Set PDF URL
+            // Set PDF URL - detect file type properly
             if (this.paper?.answerSheetPdf) {
               this.pdfUrl = this.paper.answerSheetPdf;
-              this.isPdf = this.pdfUrl.toLowerCase().endsWith('.pdf');
+              const url = this.pdfUrl.toLowerCase();
+              this.isPdf = url.endsWith('.pdf') && !url.endsWith('.jpg') && !url.endsWith('.jpeg') && !url.endsWith('.png');
             }
 
             // Initialize question marks
@@ -445,11 +454,7 @@
             this.$nextTick(() => {
               this.initFabricCanvas();
               if (this.pdfUrl) {
-                if (this.isPdf) {
-                  this.loadPdf();
-                } else {
-                  this.loadImage();
-                }
+                this.loadFile();
               }
             });
 
@@ -551,24 +556,47 @@
         },
 
         // =====================
-        // PDF.JS RENDERING
+        // FILE LOADING (PDF or Image)
         // =====================
+        async loadFile() {
+          try {
+            // First, detect actual file type via HEAD request
+            const headRes = await fetch(this.pdfUrl, { method: 'HEAD' }).catch(() => null);
+            const contentType = headRes?.headers?.get('content-type') || '';
+
+            if (contentType.includes('image/') || !this.isPdf) {
+              // It's an image file
+              this.isPdf = false;
+              this.loadImage();
+              return;
+            }
+
+            // Try loading as PDF
+            await this.loadPdf();
+          } catch (err) {
+            console.error('File load error:', err);
+            // Final fallback: try as image
+            this.isPdf = false;
+            this.loadImage();
+          }
+        },
+
         async loadPdf() {
           try {
-            this.pdfDoc = await pdfjsLib.getDocument(this.pdfUrl).promise;
+            const loadingTask = pdfjsLib.getDocument(this.pdfUrl);
+            this.pdfDoc = await loadingTask.promise;
             this.totalPages = this.pdfDoc.numPages;
             await this.renderPage(this.currentPage);
           } catch (err) {
-            console.error('PDF load error:', err);
-            // Fallback: try as image
+            console.warn('PDF.js could not load file, falling back to image mode:', err.message);
             this.isPdf = false;
+            this.pdfDoc = null;
             this.loadImage();
           }
         },
 
         async renderPage(pageNum) {
           if (this.renderingPage) return;
-          if (!this.pdfDoc && this.isPdf) return;
 
           this.renderingPage = true;
           this.currentPage = pageNum;
@@ -579,6 +607,7 @@
 
           try {
             if (this.isPdf && this.pdfDoc) {
+              // PDF mode: render the specific page
               const page = await this.pdfDoc.getPage(pageNum);
               const viewport = page.getViewport({ scale: 1.5 });
 
@@ -587,11 +616,15 @@
               pdfCanvas.height = viewport.height;
 
               const ctx = pdfCanvas.getContext('2d');
+              ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
               await page.render({ canvasContext: ctx, viewport }).promise;
 
               // Resize fabric canvas to match
               this.fabricCanvas.setWidth(viewport.width);
               this.fabricCanvas.setHeight(viewport.height);
+            } else {
+              // Image mode: reload the image (for single page)
+              await this.loadImageToCanvas();
             }
 
             // Load annotations for this page
@@ -604,25 +637,43 @@
         },
 
         loadImage() {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => {
-            const pdfCanvas = document.getElementById('pdfCanvas');
-            const maxW = 800;
-            const scale = img.width > maxW ? maxW / img.width : 1;
-            pdfCanvas.width = img.width * scale;
-            pdfCanvas.height = img.height * scale;
+          this.totalPages = this.paper?.totalPages || 1;
+          this.loadImageToCanvas();
+        },
 
-            const ctx = pdfCanvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, pdfCanvas.width, pdfCanvas.height);
+        loadImageToCanvas() {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              const pdfCanvas = document.getElementById('pdfCanvas');
+              const maxW = 800;
+              const scale = img.width > maxW ? maxW / img.width : 1;
+              pdfCanvas.width = img.width * scale;
+              pdfCanvas.height = img.height * scale;
 
-            this.fabricCanvas.setWidth(pdfCanvas.width);
-            this.fabricCanvas.setHeight(pdfCanvas.height);
+              const ctx = pdfCanvas.getContext('2d');
+              ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+              ctx.drawImage(img, 0, 0, pdfCanvas.width, pdfCanvas.height);
 
-            this.loadPageAnnotation(1);
-            this.canvasReady = true;
-          };
-          img.src = this.pdfUrl;
+              if (this.fabricCanvas) {
+                this.fabricCanvas.setWidth(pdfCanvas.width);
+                this.fabricCanvas.setHeight(pdfCanvas.height);
+              }
+
+              this.canvasReady = true;
+              this.loadPageAnnotation(this.currentPage);
+              resolve();
+            };
+            img.onerror = () => {
+              console.error('Failed to load image:', this.pdfUrl);
+              // Try using iframe as last resort
+              this.useIframeFallback = true;
+              this.canvasReady = true;
+              resolve();
+            };
+            img.src = this.pdfUrl;
+          });
         },
 
         // =====================
