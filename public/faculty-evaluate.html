@@ -496,10 +496,10 @@
             preserveObjectStacking: true,
           });
 
-          // Save annotation on every object change
-          this.fabricCanvas.on('object:added', () => this.savePageAnnotation());
-          this.fabricCanvas.on('object:modified', () => this.savePageAnnotation());
-          this.fabricCanvas.on('object:removed', () => this.savePageAnnotation());
+          // Save annotation on every object change — persist to local + trigger server save
+          this.fabricCanvas.on('object:added', () => { this.savePageAnnotation(); this.autoSave(); });
+          this.fabricCanvas.on('object:modified', () => { this.savePageAnnotation(); this.autoSave(); });
+          this.fabricCanvas.on('object:removed', () => { this.savePageAnnotation(); this.autoSave(); });
 
           // Text tool: add text on click
           this.fabricCanvas.on('mouse:down', (opt) => {
@@ -740,20 +740,27 @@
         savePageAnnotation() {
           if (!this.fabricCanvas) return;
           const json = this.fabricCanvas.toJSON();
-          if (json.objects.length > 0) {
-            this.pageAnnotations[this.currentPage] = json;
+          // Use string key for MongoDB compatibility
+          const key = String(this.currentPage);
+          if (json.objects && json.objects.length > 0) {
+            this.pageAnnotations[key] = json;
           } else {
-            delete this.pageAnnotations[this.currentPage];
+            delete this.pageAnnotations[key];
           }
         },
 
         loadPageAnnotation(pageNum) {
           if (!this.fabricCanvas) return;
           this.fabricCanvas.clear();
-          const saved = this.pageAnnotations[pageNum];
+          // Try both string and number keys (MongoDB stores as string)
+          const saved = this.pageAnnotations[String(pageNum)] || this.pageAnnotations[pageNum];
           if (saved) {
             this.fabricCanvas.loadFromJSON(saved, () => {
               this.fabricCanvas.renderAll();
+              // Re-apply current tool settings after loading
+              if (this.activeTool !== 'select') {
+                this.setTool(this.activeTool);
+              }
             });
           }
         },

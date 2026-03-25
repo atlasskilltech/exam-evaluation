@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View Annotated Evaluation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    #canvasWrap .canvas-container {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      z-index: 2;
+      background: transparent !important;
+    }
+    #canvasWrap .canvas-container canvas { background: transparent !important; }
+    .viewer-transform { transition: transform 0.3s ease; transform-origin: center center; }
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-gray-900 min-h-screen" x-data="viewApp()" x-init="init()">
+
+  <!-- Header -->
+  <header class="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="javascript:history.back()" class="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+      </a>
+      <span class="text-white font-semibold text-sm">View Annotated Evaluation</span>
+    </div>
+    <div class="flex items-center gap-3 text-xs">
+      <span class="bg-gray-700/50 px-2.5 py-1 rounded-full text-white" x-text="evaluation.studentName || '-'"></span>
+      <span class="bg-gray-700/50 px-2.5 py-1 rounded-full text-gray-300" x-text="'Roll: ' + (evaluation.rollNo || '-')"></span>
+      <span class="bg-gray-700/50 px-2.5 py-1 rounded-full text-cyan-400" x-text="evaluation.subject || '-'"></span>
+      <span class="px-2.5 py-1 rounded-full font-bold"
+            :class="evaluation.status === 'approved' ? 'bg-green-600 text-white' : evaluation.status === 'submitted' ? 'bg-indigo-600 text-white' : 'bg-yellow-600 text-white'"
+            x-text="(evaluation.status || 'draft').toUpperCase()"></span>
+    </div>
+    <div class="bg-gray-700/50 px-3 py-1 rounded-full text-sm font-bold"
+         :class="evaluation.totalMarks > 0 ? 'text-teal-400' : 'text-gray-400'"
+         x-text="(evaluation.totalMarks || 0) + ' / ' + (evaluation.maxTotalMarks || 0)"></div>
+  </header>
+
+  <!-- Loading -->
+  <div x-show="loading" class="flex items-center justify-center h-screen bg-gray-900">
+    <svg class="animate-spin w-10 h-10 text-teal-500" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg>
+  </div>
+
+  <!-- Main -->
+  <div x-show="!loading" x-cloak class="flex h-[calc(100vh-44px)]">
+
+    <!-- Page nav -->
+    <div class="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-2 gap-1 overflow-y-auto">
+      <template x-for="n in totalPages" :key="n">
+        <button @click="loadPage(n)"
+                :class="currentPage === n ? 'bg-teal-500 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
+                class="w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition"
+                x-text="n"></button>
+      </template>
+    </div>
+
+    <!-- Viewer -->
+    <div class="flex-1 bg-gray-900 overflow-auto flex items-start justify-center p-4">
+      <div class="viewer-transform" :style="'transform: scale(' + zoom + '); transform-origin: top center;'">
+        <div class="relative" id="canvasWrap">
+          <canvas id="pdfCanvas" style="position:absolute;top:0;left:0;z-index:0;"></canvas>
+          <canvas id="fabricCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel: Scores -->
+    <div class="w-72 bg-gray-900 border-l border-gray-700 flex flex-col overflow-hidden">
+      <div class="px-4 py-3 bg-gray-800 border-b border-gray-700">
+        <p class="text-white font-semibold text-sm" x-text="evaluation.studentName || 'Student'"></p>
+        <p class="text-xs text-gray-400 mt-1">Evaluated by: <span class="text-cyan-400" x-text="evaluation.faculty || '-'"></span></p>
+        <p class="text-lg font-bold mt-1" :class="evaluation.totalMarks > 0 ? 'text-teal-400' : 'text-gray-500'"
+           x-text="(evaluation.totalMarks || 0) + ' / ' + (evaluation.maxTotalMarks || 0) + ' (' + (evaluation.percentage || 0) + '%)'"></p>
+      </div>
+
+      <div class="px-4 py-2 bg-gray-800/50 border-b border-gray-700 flex text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+        <span class="w-12">Q.No</span>
+        <span class="flex-1 text-center">Max</span>
+        <span class="w-16 text-center">Score</span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scroll">
+        <template x-for="q in evaluation.questionMarks || []" :key="q.qNo">
+          <div class="px-3 py-2 border-b border-gray-800 flex items-center">
+            <span class="w-10 h-8 rounded-lg text-xs font-bold flex items-center justify-center"
+                  :class="q.marksAwarded > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                  x-text="q.qNo"></span>
+            <span class="flex-1 text-center text-sm text-gray-500" x-text="q.maxMarks"></span>
+            <span class="w-16 text-center text-sm font-bold text-white" x-text="q.marksAwarded"></span>
+          </div>
+        </template>
+      </div>
+
+      <div class="px-4 py-2 bg-gray-800 border-t border-gray-700 flex items-center gap-2">
+        <button @click="zoom = Math.max(0.5, zoom - 0.1)" class="text-gray-400 hover:text-white p-1">-</button>
+        <span class="text-xs text-gray-300" x-text="Math.round(zoom*100)+'%'"></span>
+        <button @click="zoom = Math.min(3, zoom + 0.1)" class="text-gray-400 hover:text-white p-1">+</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function viewApp() {
+      return {
+        loading: true,
+        evalId: '',
+        evaluation: {},
+        currentPage: 1,
+        totalPages: 1,
+        zoom: 1,
+        fabricCanvas: null,
+
+        authHeaders() {
+          return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') };
+        },
+
+        async init() {
+          const params = new URLSearchParams(window.location.search);
+          this.evalId = params.get('evalId');
+          if (!this.evalId) { alert('No evalId'); return; }
+
+          try {
+            const res = await fetch('/api/faculty/annotated-evaluation/' + this.evalId, { headers: this.authHeaders() });
+            const data = await res.json();
+            if (!data.success) { alert(data.message); return; }
+
+            this.evaluation = data.evaluation;
+            this.totalPages = data.evaluation.totalPages || 1;
+
+            this.$nextTick(() => {
+              this.initCanvas();
+              this.loadPage(1);
+            });
+          } catch (e) {
+            console.error(e);
+            alert('Failed to load evaluation');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        initCanvas() {
+          const fc = document.getElementById('fabricCanvas');
+          this.fabricCanvas = new fabric.Canvas(fc, {
+            isDrawingMode: false,
+            selection: false,
+            interactive: false,
+          });
+        },
+
+        loadPage(pageNum) {
+          this.currentPage = pageNum;
+          const paperId = this.evaluation.paperId;
+          if (!paperId) return;
+
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const pdfCanvas = document.getElementById('pdfCanvas');
+            const maxW = 800;
+            const scale = img.width > maxW ? maxW / img.width : 1;
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+
+            pdfCanvas.width = w;
+            pdfCanvas.height = h;
+            pdfCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+            if (this.fabricCanvas) {
+              this.fabricCanvas.setWidth(w);
+              this.fabricCanvas.setHeight(h);
+              const container = this.fabricCanvas.wrapperEl;
+              if (container) { container.style.width = w+'px'; container.style.height = h+'px'; }
+            }
+
+            const wrap = document.getElementById('canvasWrap');
+            if (wrap) { wrap.style.width = w+'px'; wrap.style.height = h+'px'; }
+
+            // Load annotations for this page (read-only)
+            this.loadAnnotations(pageNum);
+          };
+          img.onerror = () => console.error('Failed to load page', pageNum);
+          img.src = '/api/faculty/page-image/' + paperId + '/' + pageNum;
+        },
+
+        loadAnnotations(pageNum) {
+          if (!this.fabricCanvas) return;
+          this.fabricCanvas.clear();
+          const annotations = this.evaluation.annotations || {};
+          const saved = annotations[String(pageNum)] || annotations[pageNum];
+          if (saved) {
+            this.fabricCanvas.loadFromJSON(saved, () => {
+              // Make all objects non-interactive (read-only)
+              this.fabricCanvas.getObjects().forEach(obj => {
+                obj.set({ selectable: false, evented: false });
+              });
+              this.fabricCanvas.renderAll();
+            });
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

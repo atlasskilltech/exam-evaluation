@@ -317,9 +317,16 @@ exports.saveEvaluation = async (req, res, next) => {
 
     const evaluation = await FacultyEvaluation.findOneAndUpdate(
       { studentPaperId: paperId, facultyId },
-      updateData,
+      { $set: updateData },
       { upsert: true, new: true, runValidators: true }
     );
+
+    // Ensure Mixed type field is properly persisted
+    if (annotations !== undefined) {
+      evaluation.annotations = annotations;
+      evaluation.markModified('annotations');
+      await evaluation.save();
+    }
 
     // Update paper status
     if (evalStatus === 'submitted') {
@@ -436,6 +443,47 @@ exports.getFacultyDashboard = async (req, res, next) => {
       success: true,
       stats: { totalAssigned, pending: pendingCount, evaluated: evaluatedCount, approved: approvedCount },
       mappings
+    });
+  } catch (err) { next(err); }
+};
+
+// ── View Annotated Evaluation (for review/admin) ─────────────
+
+exports.getAnnotatedEvaluation = async (req, res, next) => {
+  try {
+    const { evalId } = req.params;
+
+    const evaluation = await FacultyEvaluation.findById(evalId)
+      .populate('studentPaperId', 'studentName rollNo answerSheetPdf totalPages')
+      .populate('facultyId', 'name email')
+      .populate('subjectId', 'name code')
+      .populate('examId', 'name');
+
+    if (!evaluation) {
+      return res.status(404).json({ success: false, message: 'Evaluation not found' });
+    }
+
+    res.json({
+      success: true,
+      evaluation: {
+        _id: evaluation._id,
+        studentName: evaluation.studentPaperId?.studentName,
+        rollNo: evaluation.studentPaperId?.rollNo,
+        subject: evaluation.subjectId?.name,
+        exam: evaluation.examId?.name,
+        faculty: evaluation.facultyId?.name,
+        questionMarks: evaluation.questionMarks,
+        totalMarks: evaluation.totalMarks,
+        maxTotalMarks: evaluation.maxTotalMarks,
+        percentage: evaluation.percentage,
+        status: evaluation.status,
+        annotations: evaluation.annotations || {},
+        paperId: evaluation.studentPaperId?._id,
+        totalPages: evaluation.studentPaperId?.totalPages || 1,
+        timeTaken: evaluation.timeTaken,
+        createdAt: evaluation.createdAt,
+        updatedAt: evaluation.updatedAt
+      }
     });
   } catch (err) { next(err); }
 };
