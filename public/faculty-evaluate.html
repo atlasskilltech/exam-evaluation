@@ -578,6 +578,47 @@
         // =====================
         // PAGE IMAGE LOADING (server converts PDF→images)
         // =====================
+        // PAGE IMAGE LOADING
+        // =====================
+        drawImageToCanvas(img) {
+          const pdfCanvas = document.getElementById('pdfCanvas');
+          if (!pdfCanvas) return;
+
+          const maxW = 800;
+          const scale = img.width > maxW ? maxW / img.width : 1;
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+
+          pdfCanvas.width = w;
+          pdfCanvas.height = h;
+
+          const ctx = pdfCanvas.getContext('2d');
+          ctx.clearRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // Size annotation canvas to match
+          if (this.fabricCanvas) {
+            this.fabricCanvas.setWidth(w);
+            this.fabricCanvas.setHeight(h);
+            const container = this.fabricCanvas.wrapperEl;
+            if (container) {
+              container.style.width = w + 'px';
+              container.style.height = h + 'px';
+            }
+          }
+
+          // Size parent wrapper
+          const wrap = document.getElementById('canvasWrap');
+          if (wrap) {
+            wrap.style.width = w + 'px';
+            wrap.style.height = h + 'px';
+          }
+
+          this.canvasReady = true;
+          this.pageLoading2 = false;
+          this.loadPageAnnotation(this.currentPage);
+        },
+
         loadPageImage(pageNum) {
           // Save annotations for current page before switching
           if (this.canvasReady) {
@@ -588,57 +629,28 @@
           this.visitedPages.add(pageNum);
           this.pageLoading2 = true;
 
-          const imgUrl = '/api/faculty/page-image/' + this.paperId + '/' + pageNum
-            + '?t=' + Date.now(); // cache-bust
+          // Try server-side page-image API first
+          const apiUrl = '/api/faculty/page-image/' + this.paperId + '/' + pageNum;
 
           const img = new Image();
           img.crossOrigin = 'anonymous';
-          img.onload = () => {
-            const pdfCanvas = document.getElementById('pdfCanvas');
-            if (!pdfCanvas) return;
-
-            // Scale image to max 800px wide
-            const maxW = 800;
-            const scale = img.width > maxW ? maxW / img.width : 1;
-            const w = Math.round(img.width * scale);
-            const h = Math.round(img.height * scale);
-
-            pdfCanvas.width = w;
-            pdfCanvas.height = h;
-
-            const ctx = pdfCanvas.getContext('2d');
-            ctx.clearRect(0, 0, w, h);
-            ctx.drawImage(img, 0, 0, w, h);
-
-            // Size annotation canvas to match
-            if (this.fabricCanvas) {
-              this.fabricCanvas.setWidth(w);
-              this.fabricCanvas.setHeight(h);
-              const container = this.fabricCanvas.wrapperEl;
-              if (container) {
-                container.style.width = w + 'px';
-                container.style.height = h + 'px';
-              }
-            }
-
-            // Size parent wrapper
-            const wrap = document.getElementById('canvasWrap');
-            if (wrap) {
-              wrap.style.width = w + 'px';
-              wrap.style.height = h + 'px';
-            }
-
-            this.canvasReady = true;
-            this.pageLoading2 = false;
-
-            // Load saved annotations for this page
-            this.loadPageAnnotation(pageNum);
-          };
+          img.onload = () => this.drawImageToCanvas(img);
           img.onerror = () => {
-            console.error('Failed to load page image:', imgUrl);
-            this.pageLoading2 = false;
+            // Fallback: try loading the original file URL directly
+            if (this.pdfUrl) {
+              const fallbackImg = new Image();
+              fallbackImg.crossOrigin = 'anonymous';
+              fallbackImg.onload = () => this.drawImageToCanvas(fallbackImg);
+              fallbackImg.onerror = () => {
+                console.error('All image loading methods failed');
+                this.pageLoading2 = false;
+              };
+              fallbackImg.src = this.pdfUrl;
+            } else {
+              this.pageLoading2 = false;
+            }
           };
-          img.src = imgUrl;
+          img.src = apiUrl;
         },
 
         renderPage(pageNum) {
