@@ -288,7 +288,7 @@ exports.saveEvaluation = async (req, res, next) => {
   try {
     const { paperId } = req.params;
     const facultyId = req.user.id;
-    const { questionMarks, remarks, status, timeTaken } = req.body;
+    const { questionMarks, remarks, status, timeTaken, annotations } = req.body;
 
     const paper = await StudentPaper.findById(paperId);
     if (!paper) return res.status(404).json({ success: false, message: 'Paper not found' });
@@ -299,21 +299,24 @@ exports.saveEvaluation = async (req, res, next) => {
 
     const evalStatus = status || 'draft';
 
+    const updateData = {
+      studentPaperId: paperId,
+      examId: paper.examId,
+      subjectId: paper.subjectId,
+      facultyId,
+      questionMarks,
+      totalMarks,
+      maxTotalMarks,
+      percentage,
+      status: evalStatus,
+      remarks: remarks || '',
+      timeTaken: timeTaken || 0
+    };
+    if (annotations !== undefined) updateData.annotations = annotations;
+
     const evaluation = await FacultyEvaluation.findOneAndUpdate(
       { studentPaperId: paperId, facultyId },
-      {
-        studentPaperId: paperId,
-        examId: paper.examId,
-        subjectId: paper.subjectId,
-        facultyId,
-        questionMarks,
-        totalMarks,
-        maxTotalMarks,
-        percentage,
-        status: evalStatus,
-        remarks: remarks || '',
-        timeTaken: timeTaken || 0
-      },
+      updateData,
       { upsert: true, new: true, runValidators: true }
     );
 
