@@ -18,7 +18,8 @@ const facultyEvaluationSchema = new mongoose.Schema({
   percentage:     { type: Number, default: 0 },
   status:         { type: String, enum: ['draft', 'submitted', 'approved'], default: 'draft' },
   remarks:        { type: String, default: '' },
-  timeTaken:      { type: Number, default: 0 }
+  timeTaken:      { type: Number, default: 0 },
+  annotations:    { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { timestamps: true });
 
 facultyEvaluationSchema.index({ studentPaperId: 1, facultyId: 1 }, { unique: true });
