@@ -23,9 +23,22 @@
     .canvas-wrap { position: relative; display: inline-block; }
     .canvas-wrap canvas { display: block; }
 
-    /* Make Fabric.js upper-canvas transparent background */
-    .canvas-container { background: transparent !important; }
-    .canvas-container .upper-canvas { background: transparent !important; }
+    /* Make Fabric.js canvas-container overlay the full area */
+    #canvasWrap .canvas-container {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      z-index: 2;
+      background: transparent !important;
+    }
+    #canvasWrap .canvas-container canvas {
+      background: transparent !important;
+    }
+    /* When in select mode on PDF, let iframe receive events */
+    #canvasWrap.select-mode-pdf .canvas-container {
+      pointer-events: none;
+      z-index: 0;
+    }
 
     /* Flip/rotate transforms */
     .viewer-transform { transition: transform 0.3s ease; transform-origin: center center; }
@@ -208,14 +221,18 @@
       <div class="flex-1 overflow-auto flex items-start justify-center p-4 pdf-container" id="viewerScroll">
         <div x-show="pdfUrl" class="viewer-transform"
              :style="'transform: scale(' + zoom + ') rotate(' + rotation + 'deg) scaleX(' + (flipH ? -1 : 1) + ') scaleY(' + (flipV ? -1 : 1) + '); transform-origin: top center;'">
-          <div class="relative" id="canvasWrap" :style="isPdf ? 'width:800px;height:1100px' : ''">
-            <!-- PDF: iframe as background -->
+          <div class="relative" id="canvasWrap"
+               :class="activeTool === 'select' && isPdf ? 'select-mode-pdf' : ''"
+               :style="isPdf ? 'width:800px;height:1100px' : ''">
+            <!-- PDF: iframe as background layer -->
             <iframe x-show="isPdf" :src="pdfUrl + '#page=' + currentPage"
-                    class="w-full h-full bg-white rounded shadow-lg border-0" style="position:absolute;top:0;left:0;z-index:1;"></iframe>
-            <!-- Image: canvas as background -->
-            <canvas x-show="!isPdf" id="pdfCanvas" style="position:absolute;top:0;left:0;z-index:1;"></canvas>
-            <!-- Annotation layer on top of both -->
-            <canvas id="fabricCanvas" :style="'position:relative; z-index:' + (activeTool === 'select' && isPdf ? '0' : '2') + ';'"></canvas>
+                    class="w-full h-full bg-white rounded shadow-lg border-0"
+                    style="position:absolute;top:0;left:0;z-index:0;"></iframe>
+            <!-- Image: canvas as background layer -->
+            <canvas x-show="!isPdf" id="pdfCanvas"
+                    style="position:absolute;top:0;left:0;z-index:0;"></canvas>
+            <!-- Annotation layer - Fabric.js will wrap this in .canvas-container -->
+            <canvas id="fabricCanvas"></canvas>
           </div>
         </div>
         <!-- No file loaded -->
@@ -557,16 +574,21 @@
         // =====================
         loadFile() {
           if (this.isPdf) {
-            // PDF: size the annotation canvas to match the iframe
+            // PDF: size the annotation canvas to match the iframe (800x1100)
             if (this.fabricCanvas) {
               this.fabricCanvas.setWidth(800);
               this.fabricCanvas.setHeight(1100);
+              // Ensure the Fabric.js wrapper div also has correct size
+              const container = this.fabricCanvas.wrapperEl;
+              if (container) {
+                container.style.width = '800px';
+                container.style.height = '1100px';
+              }
               this.fabricCanvas.renderAll();
             }
             this.canvasReady = true;
             this.loadPageAnnotation(this.currentPage);
           } else {
-            // Images use canvas with Fabric.js annotations
             this.loadImageToCanvas();
           }
         },
@@ -604,6 +626,18 @@
             if (this.fabricCanvas) {
               this.fabricCanvas.setWidth(pdfCanvas.width);
               this.fabricCanvas.setHeight(pdfCanvas.height);
+              const container = this.fabricCanvas.wrapperEl;
+              if (container) {
+                container.style.width = pdfCanvas.width + 'px';
+                container.style.height = pdfCanvas.height + 'px';
+              }
+            }
+
+            // Set parent wrapper size for images
+            const wrap = document.getElementById('canvasWrap');
+            if (wrap) {
+              wrap.style.width = pdfCanvas.width + 'px';
+              wrap.style.height = pdfCanvas.height + 'px';
             }
 
             this.canvasReady = true;
