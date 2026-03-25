@@ -23,7 +23,7 @@
     .canvas-wrap { position: relative; display: inline-block; }
     .canvas-wrap canvas { display: block; }
 
-    /* Make Fabric.js canvas-container overlay the full area */
+    /* Fabric.js canvas-container overlay on top of background image */
     #canvasWrap .canvas-container {
       position: absolute !important;
       top: 0 !important;
@@ -33,11 +33,6 @@
     }
     #canvasWrap .canvas-container canvas {
       background: transparent !important;
-    }
-    /* When in select mode on PDF, let iframe receive events */
-    #canvasWrap.select-mode-pdf .canvas-container {
-      pointer-events: none;
-      z-index: 0;
     }
 
     /* Flip/rotate transforms */
@@ -217,25 +212,26 @@
         <span class="ml-2 text-gray-500" x-text="'| Rot: ' + rotation + '°'"></span>
       </div>
 
-      <!-- Viewer area -->
+      <!-- Viewer area — always canvas based -->
       <div class="flex-1 overflow-auto flex items-start justify-center p-4 pdf-container" id="viewerScroll">
-        <div x-show="pdfUrl" class="viewer-transform"
+        <div x-show="canvasReady" class="viewer-transform"
              :style="'transform: scale(' + zoom + ') rotate(' + rotation + 'deg) scaleX(' + (flipH ? -1 : 1) + ') scaleY(' + (flipV ? -1 : 1) + '); transform-origin: top center;'">
-          <div class="relative" id="canvasWrap"
-               :class="activeTool === 'select' && isPdf ? 'select-mode-pdf' : ''"
-               :style="isPdf ? 'width:800px;height:1100px' : ''">
-            <!-- PDF: iframe as background layer -->
-            <iframe x-show="isPdf" :src="pdfUrl + '#page=' + currentPage"
-                    class="w-full h-full bg-white rounded shadow-lg border-0"
-                    style="position:absolute;top:0;left:0;z-index:0;"></iframe>
-            <!-- Image: canvas as background layer -->
-            <canvas x-show="!isPdf" id="pdfCanvas"
-                    style="position:absolute;top:0;left:0;z-index:0;"></canvas>
-            <!-- Annotation layer - Fabric.js will wrap this in .canvas-container -->
+          <div class="relative" id="canvasWrap">
+            <!-- Background image canvas -->
+            <canvas id="pdfCanvas" style="position:absolute;top:0;left:0;z-index:0;"></canvas>
+            <!-- Fabric.js annotation overlay -->
             <canvas id="fabricCanvas"></canvas>
           </div>
         </div>
-        <!-- No file loaded -->
+        <!-- Loading state -->
+        <div x-show="!canvasReady && pdfUrl" class="text-gray-400 text-center py-20">
+          <svg class="animate-spin w-10 h-10 mx-auto mb-4 text-teal-500" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+          </svg>
+          <p>Loading page...</p>
+        </div>
+        <!-- No file -->
         <div x-show="!pdfUrl" class="text-gray-500 text-center py-20">
           <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           <p>No answer sheet loaded</p>
@@ -372,8 +368,8 @@
         visitedPages: new Set([1]),
         zoom: 1,
         pdfUrl: '',
-        isPdf: true,
         canvasReady: false,
+        pageLoading2: false,
         elapsedTime: 0,
         timerInterval: null,
         saveStatus: 'Ready',
@@ -396,8 +392,6 @@
         flipH: false,
         flipV: false,
 
-        // --- Viewer State ---
-        renderingPage: false,
 
         // --- Computed ---
         get totalScore() {
@@ -434,11 +428,9 @@
             this.questionPaper = data.questionPaper;
             this.existingEvaluation = data.evaluation;
 
-            // Set file URL and detect type
+            // Set file URL (used as flag that paper has a file)
             if (this.paper?.answerSheetPdf) {
               this.pdfUrl = this.paper.answerSheetPdf;
-              const ext = this.pdfUrl.split('.').pop().toLowerCase().split('?')[0];
-              this.isPdf = !['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext);
             }
 
             // Initialize question marks
@@ -454,8 +446,6 @@
               }
             }
 
-            this.totalPages = this.paper?.totalPages || 10;
-
             // Load saved annotations
             if (this.existingEvaluation?.annotations) {
               this.pageAnnotations = this.existingEvaluation.annotations;
@@ -464,11 +454,24 @@
             // Start timer
             this.startTimer();
 
-            // Init canvas and load file after DOM ready
+            // Get actual page count from server, then init canvas
+            if (this.pdfUrl) {
+              try {
+                const countRes = await fetch('/api/faculty/page-count/' + this.paperId, { headers: this.authHeaders() });
+                const countData = await countRes.json();
+                if (countData.success) this.totalPages = countData.numPages;
+              } catch (e) {
+                this.totalPages = this.paper?.totalPages || 10;
+              }
+            } else {
+              this.totalPages = this.paper?.totalPages || 10;
+            }
+
+            // Init canvas and load first page after DOM ready
             this.$nextTick(() => {
               this.initFabricCanvas();
               if (this.pdfUrl) {
-                this.loadFile();
+                this.loadPageImage(1);
               }
             });
 
@@ -572,84 +575,74 @@
         // =====================
         // FILE LOADING
         // =====================
-        loadFile() {
-          if (this.isPdf) {
-            // PDF: size the annotation canvas to match the iframe (800x1100)
-            if (this.fabricCanvas) {
-              this.fabricCanvas.setWidth(800);
-              this.fabricCanvas.setHeight(1100);
-              // Ensure the Fabric.js wrapper div also has correct size
-              const container = this.fabricCanvas.wrapperEl;
-              if (container) {
-                container.style.width = '800px';
-                container.style.height = '1100px';
-              }
-              this.fabricCanvas.renderAll();
-            }
-            this.canvasReady = true;
-            this.loadPageAnnotation(this.currentPage);
-          } else {
-            this.loadImageToCanvas();
+        // =====================
+        // PAGE IMAGE LOADING (server converts PDF→images)
+        // =====================
+        loadPageImage(pageNum) {
+          // Save annotations for current page before switching
+          if (this.canvasReady) {
+            this.savePageAnnotation();
           }
-        },
-
-        renderPage(pageNum) {
-          // Save current page annotations before switching
-          this.savePageAnnotation();
 
           this.currentPage = pageNum;
           this.visitedPages.add(pageNum);
+          this.pageLoading2 = true;
 
-          if (!this.isPdf) {
-            this.loadImageToCanvas();
-          } else {
-            // For PDFs, iframe updates via :src binding, just load annotations
-            this.loadPageAnnotation(pageNum);
-          }
-        },
+          const imgUrl = '/api/faculty/page-image/' + this.paperId + '/' + pageNum
+            + '?t=' + Date.now(); // cache-bust
 
-        loadImageToCanvas() {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
             const pdfCanvas = document.getElementById('pdfCanvas');
             if (!pdfCanvas) return;
+
+            // Scale image to max 800px wide
             const maxW = 800;
             const scale = img.width > maxW ? maxW / img.width : 1;
-            pdfCanvas.width = img.width * scale;
-            pdfCanvas.height = img.height * scale;
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+
+            pdfCanvas.width = w;
+            pdfCanvas.height = h;
 
             const ctx = pdfCanvas.getContext('2d');
-            ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
-            ctx.drawImage(img, 0, 0, pdfCanvas.width, pdfCanvas.height);
+            ctx.clearRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
 
+            // Size annotation canvas to match
             if (this.fabricCanvas) {
-              this.fabricCanvas.setWidth(pdfCanvas.width);
-              this.fabricCanvas.setHeight(pdfCanvas.height);
+              this.fabricCanvas.setWidth(w);
+              this.fabricCanvas.setHeight(h);
               const container = this.fabricCanvas.wrapperEl;
               if (container) {
-                container.style.width = pdfCanvas.width + 'px';
-                container.style.height = pdfCanvas.height + 'px';
+                container.style.width = w + 'px';
+                container.style.height = h + 'px';
               }
             }
 
-            // Set parent wrapper size for images
+            // Size parent wrapper
             const wrap = document.getElementById('canvasWrap');
             if (wrap) {
-              wrap.style.width = pdfCanvas.width + 'px';
-              wrap.style.height = pdfCanvas.height + 'px';
+              wrap.style.width = w + 'px';
+              wrap.style.height = h + 'px';
             }
 
             this.canvasReady = true;
-            this.loadPageAnnotation(this.currentPage);
+            this.pageLoading2 = false;
+
+            // Load saved annotations for this page
+            this.loadPageAnnotation(pageNum);
           };
           img.onerror = () => {
-            console.warn('Image load failed for:', this.pdfUrl);
-            // Switch to iframe mode as fallback
-            this.isPdf = true;
-            this.canvasReady = true;
+            console.error('Failed to load page image:', imgUrl);
+            this.pageLoading2 = false;
           };
-          img.src = this.pdfUrl;
+          img.src = imgUrl;
+        },
+
+        renderPage(pageNum) {
+          this.loadPageImage(pageNum);
         },
 
         // =====================

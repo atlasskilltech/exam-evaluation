@@ -49,6 +49,8 @@ router.post('/bulk-assign', verifyToken, requireRole('superadmin', 'teacher'), f
 router.get('/my-papers', verifyToken, requireRole('faculty'), fc.getFacultyAssignedPapers);
 router.get('/evaluate/:paperId', verifyToken, requireRole('faculty'), fc.getEvaluationData);
 router.post('/evaluate/:paperId', verifyToken, requireRole('faculty'), fc.saveEvaluation);
+router.get('/page-image/:paperId/:pageNum', verifyToken, fc.getPageImage);
+router.get('/page-count/:paperId', verifyToken, fc.getPageCount);
 router.get('/evaluations/:examId', verifyToken, fc.getEvaluationsByExam);
 router.post('/approve/:evalId', verifyToken, requireRole('superadmin', 'teacher'), fc.approveEvaluation);
 
