@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Exam = require('../models/Exam');
 const Subject = require('../models/Subject');
 const path = require('path');
+const fs = require('fs');
 
 // ── Faculty Management ──────────────────────────────────────
 
@@ -437,4 +438,79 @@ exports.getFacultyDashboard = async (req, res, next) => {
       mappings
     });
   } catch (err) { next(err); }
+};
+
+// ── PDF Page Image Conversion ────────────────────────────────
+
+exports.getPageImage = async (req, res, next) => {
+  try {
+    const { paperId, pageNum } = req.params;
+    const page = parseInt(pageNum);
+
+    const paper = await StudentPaper.findById(paperId);
+    if (!paper) return res.status(404).json({ success: false, message: 'Paper not found' });
+
+    const pdfPath = paper.answerSheetPdf.replace(/^\//, '');
+    const absolutePath = path.isAbsolute(pdfPath) ? pdfPath : path.join(process.cwd(), pdfPath);
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    // Check if it's already an image file
+    const ext = path.extname(absolutePath).toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext)) {
+      return res.sendFile(absolutePath);
+    }
+
+    // It's a PDF — convert to page images
+    const { getPageImages } = require('../services/pdfImageService');
+    const result = await getPageImages(paperId, absolutePath);
+
+    if (page < 1 || page > result.numPages) {
+      return res.status(404).json({ success: false, message: 'Page not found' });
+    }
+
+    const imgPath = result.images[page - 1].path;
+    const absImgPath = path.isAbsolute(imgPath) ? imgPath : path.join(process.cwd(), imgPath);
+    res.sendFile(absImgPath);
+  } catch (err) {
+    console.error('getPageImage error:', err);
+    next(err);
+  }
+};
+
+exports.getPageCount = async (req, res, next) => {
+  try {
+    const { paperId } = req.params;
+
+    const paper = await StudentPaper.findById(paperId);
+    if (!paper) return res.status(404).json({ success: false, message: 'Paper not found' });
+
+    const pdfPath = paper.answerSheetPdf.replace(/^\//, '');
+    const absolutePath = path.isAbsolute(pdfPath) ? pdfPath : path.join(process.cwd(), pdfPath);
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    const ext = path.extname(absolutePath).toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext)) {
+      return res.json({ success: true, numPages: paper.totalPages || 1 });
+    }
+
+    const { getPageImages } = require('../services/pdfImageService');
+    const result = await getPageImages(paperId, absolutePath);
+
+    // Update paper totalPages if different
+    if (paper.totalPages !== result.numPages) {
+      paper.totalPages = result.numPages;
+      await paper.save();
+    }
+
+    res.json({ success: true, numPages: result.numPages });
+  } catch (err) {
+    console.error('getPageCount error:', err);
+    next(err);
+  }
 };

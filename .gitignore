@@ -4,5 +4,6 @@ uploads/scans/
 uploads/invoices/
 uploads/gradesheets/
 uploads/csv/
+uploads/page-images/
 *.log
 .DS_Store
